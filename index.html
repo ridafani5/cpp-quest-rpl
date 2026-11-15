@@ -40,8 +40,29 @@
             0%, 100% { transform: translateY(0); }
             50% { transform: translateY(-5px); }
         }
+        @keyframes spin-slow {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        @keyframes victory-pop {
+            0% { transform: scale(0.5); opacity: 0; }
+            70% { transform: scale(1.06); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
         .animate-float {
             animation: float 3.5s ease-in-out infinite;
+        }
+        .animate-pulse-node {
+            animation: pulse-ring 2s infinite;
+        }
+        .animate-bounce-slow {
+            animation: bounce-slow 2s infinite;
+        }
+        .animate-spin-slow {
+            animation: spin-slow 18s linear infinite;
+        }
+        .animate-victory-pop {
+            animation: victory-pop 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
         }
         .animate-pulse-node {
             animation: pulse-ring 2s infinite;
@@ -105,6 +126,24 @@
         .num { color: #fb923c; } /* number */
         .cmt { color: #64748b; font-style: italic; } /* comment */
         .fn { color: #facc15; } /* function */
+
+        /* Gaya Drag & Drop Boss Level 8 */
+        .dnd-chip {
+            user-select: none;
+            touch-action: manipulation;
+            transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.2s ease;
+        }
+        .dnd-chip:active {
+            transform: scale(0.96);
+        }
+        .dnd-slot {
+            transition: all 0.2s ease;
+        }
+        .dnd-slot.drag-over {
+            border-color: #f59e0b !important;
+            background-color: rgba(245, 158, 11, 0.2) !important;
+            transform: scale(1.02);
+        }
     </style>
 </head>
 <body class="text-slate-800 min-h-screen flex flex-col">
@@ -406,7 +445,7 @@
                 <div class="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 flex items-center justify-between gap-3 text-xs sm:text-sm">
                     <div class="flex items-center gap-2.5 text-amber-800 font-semibold">
                         <i class="fa-solid fa-shield-halved text-amber-500 text-lg"></i>
-                        <span>Syarat Tuntas: Jawab benar minimal <strong>4 dari 5 soal (Skor ≥ 80%)</strong> untuk membuka level berikutnya!</span>
+                        <span id="quiz-kkm-text">Syarat Tuntas: Raih skor minimal <strong>80%</strong> untuk membuka level berikutnya!</span>
                     </div>
                     <span id="quiz-attempt-badge" class="px-2.5 py-1 rounded-lg bg-amber-200/70 text-amber-900 font-bold text-xs shrink-0">Percobaan #1</span>
                 </div>
@@ -546,6 +585,27 @@
                 </div>
             </div>
 
+            <!-- Panel Pratinjau Materi & Soal Per Level (Khusus Guru) -->
+            <div class="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-200 space-y-3">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-9 h-9 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center text-base">
+                            <i class="fa-solid fa-eye"></i>
+                        </div>
+                        <div>
+                            <h2 class="font-game text-base font-bold text-slate-800">Pratinjau Materi & Kunci Soal Per Level</h2>
+                            <p class="text-xs text-slate-500">Klik tombol level di bawah untuk meninjau rangkuman materi, simulasi kuis, dan kunci jawaban tanpa mengunci tahapan.</p>
+                        </div>
+                    </div>
+                    <span class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                        <i class="fa-solid fa-unlock-keyhole mr-1"></i>Akses Bebas Guru (L1 - L8)
+                    </span>
+                </div>
+                <div id="teacher-level-preview-grid" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
+                    <!-- Tombol Level 1 - 8 di-render oleh JS -->
+                </div>
+            </div>
+
             <!-- Bar Filter, Pencarian & Sortir -->
             <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-3">
                 <div class="flex flex-wrap items-center gap-3 flex-1">
@@ -617,49 +677,162 @@
     </section>
 
     <!-- ===================================================================== -->
+    <!-- MODAL PRATINJAU MATERI, SOAL & KUNCI JAWABAN KHUSUS GURU              -->
+    <!-- ===================================================================== -->
+    <div id="teacher-preview-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[60] hidden items-center justify-center p-2 sm:p-4 overflow-y-auto">
+        <div class="bg-white rounded-3xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl border-4 border-amber-300 overflow-hidden my-auto">
+            <!-- Header Modal Pratinjau Guru -->
+            <div id="tp-modal-header" class="bg-gradient-to-r from-slate-800 to-indigo-900 text-white px-5 py-4 flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-3">
+                    <div id="tp-modal-badge" class="w-11 h-11 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center font-game text-xl font-bold shadow">
+                        1
+                    </div>
+                    <div>
+                        <span class="text-[11px] font-bold uppercase px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40">
+                            Mode Pratinjau Guru • Kunci Jawaban Terbuka
+                        </span>
+                        <h3 id="tp-modal-title" class="font-game text-lg sm:text-xl font-bold mt-0.5">Level 1</h3>
+                    </div>
+                </div>
+                <button onclick="closeTeacherLevelPreview()" class="w-10 h-10 rounded-xl bg-white/15 hover:bg-white/25 flex items-center justify-center text-white transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Navigasi Cepat Antar Level di dalam Modal -->
+            <div id="tp-modal-nav" class="bg-slate-100 px-4 py-2.5 border-b border-slate-200 flex items-center gap-1.5 overflow-x-auto shrink-0">
+                <!-- Pill navigasi L1-L8 diisi oleh JS -->
+            </div>
+
+            <!-- Isi Rangkuman + Daftar Soal & Kunci Jawaban -->
+            <div id="tp-modal-body" class="p-5 sm:p-6 overflow-y-auto flex-1 space-y-6 text-slate-700">
+                <!-- Diisi dinamis oleh JS -->
+            </div>
+
+            <!-- Footer Modal Pratinjau Guru -->
+            <div class="p-4 sm:px-6 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3 shrink-0">
+                <span class="text-xs text-slate-500 font-medium">
+                    <i class="fa-solid fa-circle-info text-indigo-500 mr-1"></i>Pratinjau ini tidak memengaruhi data siswa di Google Sheets.
+                </span>
+                <button onclick="closeTeacherLevelPreview()" class="btn-game bg-slate-800 hover:bg-slate-700 text-white border-slate-950 font-game font-bold px-5 py-2.5 rounded-xl text-sm">
+                    Tutup Pratinjau
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- MODAL SELEBRASI KEMENANGAN MENAKLUKKAN BOSS LEVEL 8                   -->
+    <!-- ===================================================================== -->
+    <div id="boss-victory-modal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[80] hidden items-center justify-center p-4 overflow-y-auto">
+        <!-- Efek Sinar Berputar di Latar Belakang -->
+        <div class="pointer-events-none fixed inset-0 flex items-center justify-center overflow-hidden opacity-25">
+            <div class="w-[650px] h-[650px] rounded-full animate-spin-slow"
+                style="background: repeating-conic-gradient(from 0deg, #fbbf24 0deg 15deg, transparent 15deg 30deg);">
+            </div>
+        </div>
+
+        <div class="relative z-10 max-w-lg w-full bg-gradient-to-b from-indigo-900 via-purple-900 to-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-2xl border-4 border-amber-400 text-center animate-victory-pop my-auto">
+            <!-- Badge Juara -->
+            <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-400 text-indigo-950 font-game font-bold text-xs uppercase tracking-wider shadow-lg mb-4 animate-bounce">
+                <i class="fa-solid fa-trophy text-amber-700"></i>
+                <span>MISSION ACCOMPLISHED • 8/8 LEVEL</span>
+            </div>
+
+            <!-- Avatar Siswa dengan Mahkota Emas -->
+            <div class="relative w-28 h-28 mx-auto my-3">
+                <div class="absolute -top-6 left-1/2 -translate-x-1/2 text-4xl drop-shadow-lg animate-bounce">👑</div>
+                <div id="victory-avatar" class="w-28 h-28 rounded-3xl bg-gradient-to-br from-amber-300 via-orange-400 to-rose-500 flex items-center justify-center text-6xl shadow-2xl border-4 border-white mx-auto">
+                    🤖
+                </div>
+                <div class="absolute -bottom-2 -right-2 w-10 h-10 rounded-full bg-emerald-500 border-2 border-white flex items-center justify-center text-white shadow-lg">
+                    <i class="fa-solid fa-check text-lg"></i>
+                </div>
+            </div>
+
+            <!-- Nama Siswa & Gelar -->
+            <h2 class="font-game text-2xl sm:text-3xl font-bold text-amber-300 drop-shadow mt-4 leading-tight">
+                SELAMAT, <span id="victory-username" class="text-white underline decoration-amber-400">SISWA</span>!
+            </h2>
+            <p id="victory-class-info" class="text-xs font-bold text-cyan-200 uppercase tracking-wider mt-1">
+                ABSEN #01 • XI RPL 1
+            </p>
+
+            <div class="mt-4 bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 space-y-2">
+                <p class="font-game text-base sm:text-lg font-bold text-white">
+                    🎉 Kamu Telah Menaklukkan BOSS LEVEL 8! 🎉
+                </p>
+                <p class="text-xs sm:text-sm text-indigo-100 leading-relaxed">
+                    Luar biasa! Kamu berhasil menguasai seluruh tantangan pemrograman terstruktur C++ dari <strong>Gerbang Logika</strong> hingga <strong>Master Coding</strong>!
+                </p>
+            </div>
+
+            <!-- Kartu Statistik Pencapaian -->
+            <div class="grid grid-cols-3 gap-2.5 my-5">
+                <div class="bg-slate-950/60 rounded-2xl p-3 border border-amber-400/30">
+                    <div class="text-[10px] text-amber-300 uppercase font-bold">Skor Boss</div>
+                    <div id="victory-boss-score" class="font-game text-xl font-bold text-emerald-400 mt-0.5">100%</div>
+                </div>
+                <div class="bg-slate-950/60 rounded-2xl p-3 border border-amber-400/30">
+                    <div class="text-[10px] text-amber-300 uppercase font-bold">Total XP</div>
+                    <div id="victory-total-xp" class="font-game text-xl font-bold text-amber-300 mt-0.5">1350 XP</div>
+                </div>
+                <div class="bg-slate-950/60 rounded-2xl p-3 border border-amber-400/30">
+                    <div class="text-[10px] text-amber-300 uppercase font-bold">Gelar</div>
+                    <div class="font-game text-sm font-bold text-cyan-300 mt-1">C++ Master</div>
+                </div>
+            </div>
+
+            <!-- Tombol Aksi Selebrasi -->
+            <div class="flex flex-col sm:flex-row gap-3">
+                <button type="button" onclick="closeBossVictoryModal(false)" class="flex-1 btn-game bg-white/15 hover:bg-white/25 text-white border-white/30 font-game font-bold py-3 px-4 rounded-2xl text-sm">
+                    Lihat Pembahasan Soal
+                </button>
+                <button type="button" onclick="closeBossVictoryModal(true)" class="flex-1 btn-game bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 text-indigo-950 border-amber-700 font-game font-bold py-3 px-4 rounded-2xl shadow-lg text-sm flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-crown"></i>
+                    <span>Kembali ke Peta Juara</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================== -->
     <!-- LOGIKA APLIKASI, DATA MATERI, KUIS & GOOGLE SHEETS WEB APP API        -->
     <!-- ===================================================================== -->
     <script>
         // =========================================================================
-        // 1. KONFIGURASI GOOGLE SHEETS API & STATE GLOBAL
+        // 1. KONFIGURASI GOOGLE SHEETS WEB APP API & STATE GLOBAL
         // =========================================================================
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby9m6zYBQ74jMmsc_q2P6p9g0xzjnJ_Nled-TkVQdZerjJA5unK_MX-txlcrewifcl24Q/exec";
-        const LOCAL_STORAGE_KEY = "cpp_quest_smkmuh2_students_cache_v1";
+        const LOCAL_STORAGE_KEY = "cpp_quest_smkmuh2_students_v2";
 
-        // State Siswa Aktif
+        const AVATARS = [
+            { emoji: "🤖", name: "RoboDev" },
+            { emoji: "👩‍💻", name: "CoderGirl" },
+            { emoji: "👨‍💻", name: "HackerBoy" },
+            { emoji: "🦊", name: "FoxLogic" },
+            { emoji: "🐉", name: "DragonC++" },
+            { emoji: "🚀", name: "AstroByte" },
+            { emoji: "🥷", name: "NinjaSyntax" },
+            { emoji: "🦉", name: "WiseOwl" }
+        ];
+
+        let selectedAvatarEmoji = AVATARS[0].emoji;
         let currentStudent = null;
-        // Daftar Semua Siswa (Untuk Monitoring Guru & Sinkronisasi Profil)
         let allStudentsList = [];
-
-        // State Modal Level & Quiz
         let activeLevelId = null;
         let userQuizAnswers = {};
+        let selectedDragChip = null;
 
-        // Pilihan Avatar Bertema Programmer / Gamer
-        const AVATARS = [
-            { id: 'robot', emoji: '🤖', name: 'RoboCoder' },
-            { id: 'astronaut', emoji: '👨‍🚀', name: 'CyberAstro' },
-            { id: 'ninja', emoji: '🥷', name: 'CodeNinja' },
-            { id: 'wizard', emoji: '🧙‍♂️', name: 'LogicWizard' },
-            { id: 'cat', emoji: '🐱‍💻', name: 'HackerCat' },
-            { id: 'fox', emoji: '🦊', name: 'SwiftFox' },
-            { id: 'alien', emoji: '👾', name: 'PixelAlien' },
-            { id: 'dragon', emoji: '🐲', name: 'CppDragon' }
-        ];
-        let selectedAvatarEmoji = AVATARS[0].emoji;
-
-        // Muat cache dari localStorage saat awal
         function loadLocalCache() {
             try {
                 const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
                 if (raw) {
                     const parsed = JSON.parse(raw);
-                    if (Array.isArray(parsed)) {
-                        allStudentsList = parsed;
-                    }
+                    if (Array.isArray(parsed)) allStudentsList = parsed;
                 }
             } catch (e) {
-                console.warn("Gagal membaca cache lokal:", e);
+                console.warn("Gagal memuat cache lokal:", e);
             }
         }
 
@@ -826,7 +999,7 @@
         }
 
         // =========================================================================
-        // 2. KURIKULUM LENGKAP 8 LEVEL (RANGKUMAN MATERI + SOAL KUIS / BOSS)
+        // 2. KURIKULUM LENGKAP 8 LEVEL (SOAL BERSUMBER DARI ASAS KK2 XI RPL)
         // =========================================================================
         const LEVELS_DATA = [
             {
@@ -874,25 +1047,16 @@
                             </table>
                         </div>
 
-                        <h4 class="font-bold text-slate-800 text-sm">3. Short-Circuit Evaluation & Contoh C++</h4>
-                        <p class="text-xs text-slate-600">Pada <code>&&</code>, jika kondisi pertama sudah <code>false</code>, kondisi kedua tidak akan dicek lagi (mencegah error pembagian nol). Pada <code>||</code>, jika kondisi pertama sudah <code>true</code>, kondisi kedua tidak dievaluasi.</p>
+                        <h4 class="font-bold text-slate-800 text-sm">3. Evaluasi Ekspresi Logika Majemuk</h4>
+                        <p class="text-xs text-slate-600">Urutan prioritas evaluasi: tanda kurung <code>()</code> dikerjakan lebih dulu, diikuti <code>!</code> (NOT), lalu <code>&&</code> (AND), dan terakhir <code>||</code> (OR).</p>
 <pre class="code-block"><span class="kw">#include</span> &lt;iostream&gt;
 <span class="kw">using namespace</span> std;
 
 <span class="type">int</span> <span class="fn">main</span>() {
-    <span class="type">int</span> umur = <span class="num">18</span>;
-    <span class="type">bool</span> punyaSIM = <span class="kw">true</span>;
-
-    <span class="cmt">// Operator AND: Keduanya harus true</span>
-    <span class="kw">if</span> (umur >= <span class="num">17</span> && punyaSIM) {
-        cout &lt;&lt; <span class="str">"Boleh mengemudi."</span> &lt;&lt; endl;
-    }
-
-    <span class="cmt">// Short-circuit mencegah Division by Zero</span>
-    <span class="type">int</span> x = <span class="num">0</span>;
-    <span class="kw">if</span> (x != <span class="num">0</span> && (<span class="num">10</span> / x > <span class="num">2</span>)) {
-        cout &lt;&lt; <span class="str">"Aman dari crash!"</span>;
-    }
+    <span class="type">bool</span> K = <span class="kw">true</span>, S = <span class="kw">true</span>, C = <span class="kw">true</span>;
+    <span class="type">bool</span> pompaMenyala = (!K && S) || (!C);
+    <span class="cmt">// (!true && true) || (!true) -> false || false -> false</span>
+    cout &lt;&lt; pompaMenyala &lt;&lt; endl;
     <span class="kw">return</span> <span class="num">0</span>;
 }</pre>
                     </div>
@@ -900,166 +1064,71 @@
                 questions: [
                     {
                         type: 'mcq',
-                        q: "Jika kondisi A bernilai true dan kondisi B bernilai false, berapakah hasil dari ekspresi (A && B) || !B ?",
-                        options: ["true", "false", "Error kompilasi", "0"],
-                        answer: 0,
-                        explanation: "(true && false) menghasilkan false. Sedangkan !B (!false) menghasilkan true. Maka false || true = true."
-                    },
-                    {
-                        type: 'mcq',
-                        q: "Operator logika di C++ yang menghasilkan nilai true HANYA JIKA semua kondisi yang diuji bernilai true adalah...",
-                        options: ["|| (OR)", "! (NOT)", "&& (AND)", "== (Equal)"],
-                        answer: 2,
-                        explanation: "Operator AND (&&) mewajibkan seluruh operand bernilai true agar hasilnya true."
-                    },
-                    {
-                        type: 'mcq',
-                        q: "Apa tujuan utama dari fitur 'Short-Circuit Evaluation' pada ekspresi: if (x != 0 && (100 / x > 5)) ?",
+                        q: "Sistem kontrol penyiraman otomatis pada smart greenhouse menggunakan tiga sensor: kelembapan tanah (K), suhu udara (S), dan cahaya (C). Pompa air akan menyala (true) jika memenuhi ekspresi logika C++: bool pompaMenyala = (!K && S) || (!C); Kombinasi nilai sensor berikut yang menyebabkan pompaMenyala bernilai false (pompa mati) adalah ....",
                         options: [
-                            "Mempercepat tampilan output ke layar",
-                            "Mencegah error Division by Zero jika x bernilai 0",
-                            "Mengubah nilai x menjadi positif secara otomatis",
-                            "Mengulang pengecekan kondisi sebanyak 2 kali"
+                            "K = false, S = true, C = true",
+                            "K = true, S = false, C = false",
+                            "K = false, S = false, C = false",
+                            "K = true, S = true, C = true",
+                            "K = false, S = true, C = false"
+                        ],
+                        answer: 3,
+                        explanation: "Jika K = true, S = true, C = true: !K menjadi false sehingga (!K && S) = false, dan !C menjadi false. Hasil akhir false || false = false."
+                    },
+                    {
+                        type: 'mcq',
+                        q: "Diketahui variabel int a = 8, b = 12, c = 5;. Tentukan nilai kebenaran dari ekspresi logika C++ berikut: !((a > b) || (c <= a)) && (b != 10)",
+                        options: [
+                            "true",
+                            "false",
+                            "1",
+                            "Error kompilasi"
                         ],
                         answer: 1,
-                        explanation: "Karena x != 0 bernilai false saat x=0, C++ langsung menghentikan evaluasi dan tidak mengeksekusi 100 / x."
+                        explanation: "(a > b) bernilai false (8 > 12), (c <= a) bernilai true (5 <= 8). (false || true) = true. Dibalik dengan ! menjadi false. Lalu false && true = false."
                     },
                     {
-                        type: 'mcq',
-                        q: "Struktur percabangan switch-case secara prinsip logika setara dengan evaluasi gerbang logika...",
-                        options: ["NOT bertingkat", "AND multi-tingkat", "Perbandingan kesamaan (==) Multi-OR", "XOR eksklusif"],
-                        answer: 2,
-                        explanation: "switch-case mengecek apakah variabel sama dengan case 1 ATAU case 2 ATAU case 3 (Multi-OR)."
-                    },
-                    {
-                        type: 'mcq',
-                        q: "Perhatikan ekspresi: !(true || false) && true. Hasil akhirnya adalah...",
-                        options: ["true", "false", "1", "null"],
-                        answer: 1,
-                        explanation: "(true || false) = true. Dibalik dengan NOT (!) menjadi false. Lalu false && true = false."
+                        type: 'mcq_multi',
+                        q: "Sebuah brankas digital di laboratorium RPL dirancang menggunakan fungsi logika F = (A AND B) OR (NOT A AND C) dengan input: A = Sidik Jari (1=cocok), B = Kartu RFID (1=valid), C = Mode Darurat (1=aktif). Pilih SEMUA kombinasi kondisi yang akan membuka kunci brankas (F = 1)!",
+                        options: [
+                            "Sidik jari cocok (1), kartu RFID valid (1), dan mode darurat nonaktif (0).",
+                            "Sidik jari tidak cocok (0), kartu RFID valid (1), dan mode darurat nonaktif (0).",
+                            "Sidik jari tidak cocok (0), kartu RFID tidak valid (0), dan mode darurat aktif (1).",
+                            "Sidik jari cocok (1), kartu RFID tidak valid (0), dan mode darurat aktif (1).",
+                            "Sidik jari cocok (1), kartu RFID valid (1), dan mode darurat aktif (1)."
+                        ],
+                        answers: [0, 2, 4],
+                        explanation: "F = 1 terpenuhi saat: (1) A=1, B=1, C=0 -> (1&&1)||(0&&0) = 1; (3) A=0, B=0, C=1 -> (0&&0)||(1&&1) = 1; dan (5) A=1, B=1, C=1 -> (1&&1)||(0&&1) = 1."
                     }
                 ]
             },
             {
                 id: 2,
-                title: "Struktur Dasar C++",
-                subtitle: "Header, main(), cout, cin",
+                title: "Struktur Dasar C++ & Operator",
+                subtitle: "Header, main(), cout, Type Casting & Modulo",
                 icon: "fa-file-code",
                 color: "from-cyan-500 to-blue-600",
                 summaryHTML: `
                     <div class="space-y-4">
                         <div class="bg-sky-50 border-l-4 border-sky-500 p-4 rounded-r-xl">
-                            <h4 class="font-bold text-sky-950 text-base mb-1">1. Kerangka Wajib Program C++</h4>
-                            <p class="text-sm text-slate-700">Setiap program C++ memiliki struktur standar yang dibaca oleh compiler dari atas ke bawah, dimulai dari fungsi utama <code>main()</code>.</p>
+                            <h4 class="font-bold text-sky-950 text-base mb-1">1. Kerangka Wajib & Ekspresi Aritmatika C++</h4>
+                            <p class="text-sm text-slate-700">Program C++ dieksekusi mulai dari <code>int main()</code> dengan pustaka <code>#include &lt;iostream&gt;</code> untuk menangani perintah keluaran <code>cout &lt;&lt;</code> dan masukan <code>cin &gt;&gt;</code>.</p>
                         </div>
 
                         <ul class="space-y-2 text-sm text-slate-700">
-                            <li><code class="bg-slate-100 px-2 py-0.5 rounded font-bold text-indigo-700">#include &lt;iostream&gt;</code> : Pustaka standar untuk operasi input (<code>cin</code>) dan output (<code>cout</code>).</li>
-                            <li><code class="bg-slate-100 px-2 py-0.5 rounded font-bold text-indigo-700">using namespace std;</code> : Memudahkan pemanggilan perintah standar seperti <code>cout</code> tanpa menulis <code>std::cout</code>.</li>
-                            <li><code class="bg-slate-100 px-2 py-0.5 rounded font-bold text-indigo-700">int main() { ... }</code> : Fungsi utama tempat program pertama kali dieksekusi.</li>
-                            <li><code class="bg-slate-100 px-2 py-0.5 rounded font-bold text-indigo-700">cout &lt;&lt;</code> & <code class="bg-slate-100 px-2 py-0.5 rounded font-bold text-indigo-700">cin &gt;&gt;</code> : <code>cout</code> mencetak teks ke layar, sedangkan <code>cin</code> membaca input dari keyboard.</li>
-                            <li><code class="bg-slate-100 px-2 py-0.5 rounded font-bold text-indigo-700">Titik koma (;)</code> & <code class="bg-slate-100 px-2 py-0.5 rounded font-bold text-indigo-700">Komentar (//)</code> : Setiap pernyataan C++ wajib diakhiri titik koma <code>;</code>. Komentar diawali <code>//</code> dan diabaikan compiler.</li>
+                            <li><strong>Pembagian Integer (<code>/</code>):</strong> Jika dua bilangan <code>int</code> dibagi (misal <code>15 / 4</code>), hasilnya dibulatkan ke bawah menjadi bilangan bulat <code>3</code> sebelum dikonversi ke <code>double</code>.</li>
+                            <li><strong>Operator Modulo (<code>%</code>):</strong> Menghasilkan sisa bagi bilangan bulat (misal <code>15 % 4</code> menghasilkan sisa <code>3</code>).</li>
+                            <li><strong>Type Casting <code>(double)</code>:</strong> Mengonversi tipe data ekspresi secara eksplisit menjadi bilangan desimal.</li>
                         </ul>
 
-<pre class="code-block"><span class="kw">#include</span> &lt;iostream&gt; <span class="cmt">// Header input-output</span>
-<span class="kw">using namespace</span> std;
-
-<span class="type">int</span> <span class="fn">main</span>() {
-    <span class="type">int</span> absen;
-    cout &lt;&lt; <span class="str">"Masukkan nomor absen: "</span>;
-    cin &gt;&gt; absen; <span class="cmt">// Membaca input pengguna</span>
-    cout &lt;&lt; <span class="str">"Halo siswa absen ke-"</span> &lt;&lt; absen &lt;&lt; endl;
-    <span class="kw">return</span> <span class="num">0</span>; <span class="cmt">// Menandakan program selesai dengan sukses</span>
-}</pre>
-                    </div>
-                `,
-                questions: [
-                    {
-                        type: 'mcq',
-                        q: "Fungsi utama yang pertama kali dieksekusi saat program C++ dijalankan adalah...",
-                        options: ["start()", "void setup()", "int main()", "include()"],
-                        answer: 2,
-                        explanation: "int main() adalah titik masuk (entry point) utama dari setiap program C++."
-                    },
-                    {
-                        type: 'mcq',
-                        q: "File header yang wajib disertakan agar kita bisa menggunakan perintah cout dan cin adalah...",
-                        options: ["#include <cmath>", "#include <iostream>", "#include <string>", "#include <stdio>"],
-                        answer: 1,
-                        explanation: "<iostream> (Input Output Stream) menyediakan objek cout dan cin."
-                    },
-                    {
-                        type: 'mcq',
-                        q: "Simbol tanda baca yang wajib diletakkan di akhir setiap baris pernyataan (statement) C++ adalah...",
-                        options: ["Titik dua (:)", "Koma (,)", "Titik koma (;)", "Tanda pagar (#)"],
-                        answer: 2,
-                        explanation: "Titik koma (;) berfungsi sebagai terminator pernyataan dalam sintaks C++."
-                    },
-                    {
-                        type: 'mcq',
-                        q: "Manakah penulisan perintah yang benar untuk menerima input keyboard ke dalam variabel 'umur'?",
-                        options: ["cout >> umur;", "cin << umur;", "cin >> umur;", "input(umur);"],
-                        answer: 2,
-                        explanation: "cin menggunakan operator ekstraksi >> untuk menyimpan input ke variabel."
-                    },
-                    {
-                        type: 'mcq',
-                        q: "Apa fungsi dari baris kode: // Menghitung luas persegi ?",
-                        options: [
-                            "Menampilkan tulisan ke layar",
-                            "Komentar catatan programmer yang diabaikan saat kompilasi",
-                            "Membagi dua buah bilangan",
-                            "Menghentikan jalannya program"
-                        ],
-                        answer: 1,
-                        explanation: "Tanda // menandai komentar satu baris yang tidak dieksekusi oleh compiler."
-                    }
-                ]
-            },
-            {
-                id: 3,
-                title: "Variabel & Tipe Data",
-                subtitle: "int, double, string, bool, const",
-                icon: "fa-box-open",
-                color: "from-blue-500 to-indigo-600",
-                summaryHTML: `
-                    <div class="space-y-4">
-                        <div class="bg-indigo-50 border-l-4 border-indigo-500 p-4 rounded-r-xl">
-                            <h4 class="font-bold text-indigo-950 text-base mb-1">1. Mengenal Variabel & Tipe Data</h4>
-                            <p class="text-sm text-slate-700">Variabel adalah wadah penyimpanan data di memori komputer yang memiliki nama dan tipe data tertentu.</p>
-                        </div>
-
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                            <div class="p-3 rounded-xl border border-slate-200 bg-white">
-                                <span class="font-mono font-bold text-blue-600 text-sm">int</span>
-                                <p class="text-slate-600 mt-1">Menyimpan bilangan bulat (tanpa koma). Contoh: <code>int umur = 17;</code></p>
-                            </div>
-                            <div class="p-3 rounded-xl border border-slate-200 bg-white">
-                                <span class="font-mono font-bold text-blue-600 text-sm">double / float</span>
-                                <p class="text-slate-600 mt-1">Menyimpan bilangan desimal/pecahan. Contoh: <code>double phi = 3.14;</code></p>
-                            </div>
-                            <div class="p-3 rounded-xl border border-slate-200 bg-white">
-                                <span class="font-mono font-bold text-blue-600 text-sm">char & string</span>
-                                <p class="text-slate-600 mt-1"><code>char</code> untuk 1 karakter petik tunggal (<code>'A'</code>). <code>string</code> untuk teks petik ganda (<code>"RPL"</code>).</p>
-                            </div>
-                            <div class="p-3 rounded-xl border border-slate-200 bg-white">
-                                <span class="font-mono font-bold text-blue-600 text-sm">bool & const</span>
-                                <p class="text-slate-600 mt-1"><code>bool</code> bernilai <code>true</code>/<code>false</code>. Kata kunci <code>const</code> membuat nilai tetap (tidak bisa diubah).</p>
-                            </div>
-                        </div>
-
 <pre class="code-block"><span class="kw">#include</span> &lt;iostream&gt;
-<span class="kw">#include</span> &lt;string&gt;
 <span class="kw">using namespace</span> std;
 
 <span class="type">int</span> <span class="fn">main</span>() {
-    <span class="kw">const</span> <span class="type">double</span> PI = <span class="num">3.14</span>; <span class="cmt">// Konstanta tetap</span>
-    <span class="type">string</span> nama = <span class="str">"Budi"</span>;
-    <span class="type">int</span> nilai = <span class="num">85</span>;
-    <span class="type">char</span> grade = <span class="str">'A'</span>;
-    <span class="type">bool</span> lulus = (nilai >= <span class="num">75</span>);
-
-    cout &lt;&lt; nama &lt;&lt; <span class="str">" mendapat grade "</span> &lt;&lt; grade &lt;&lt; endl;
+    <span class="type">int</span> a = <span class="num">15</span>, b = <span class="num">4</span>;
+    <span class="cmt">// a / b = 3 (integer division), a % b = 3</span>
+    <span class="type">double</span> hasil = (<span class="type">double</span>)(a / b) + (a % b) * <span class="num">1.5</span>;
+    cout &lt;&lt; hasil &lt;&lt; endl; <span class="cmt">// 3.0 + 4.5 = 7.5</span>
     <span class="kw">return</span> <span class="num">0</span>;
 }</pre>
                     </div>
@@ -1067,369 +1136,381 @@
                 questions: [
                     {
                         type: 'mcq',
-                        q: "Tipe data yang paling tepat untuk menyimpan harga barang dengan pecahan desimal seperti 15500.75 adalah...",
-                        options: ["int", "char", "double", "bool"],
-                        answer: 2,
-                        explanation: "double digunakan untuk menyimpan angka desimal dengan presisi tinggi."
+                        q: "Perhatikan potongan kode program C++ berikut: int a = 15, b = 4; double hasil = (double)(a / b) + (a % b) * 1.5; cout << hasil << endl; Jika program dijalankan, keluaran (output) yang tampil pada layar konsol adalah ....",
+                        options: ["7.5", "8.25", "8.0", "6.5", "9.0"],
+                        answer: 0,
+                        explanation: "Ekspresi (a / b) dievaluasi sebagai pembagian integer 15 / 4 = 3, lalu di-cast ke (double) menjadi 3.0. Sedangkan (a % b) = 3, dikali 1.5 = 4.5. Total: 3.0 + 4.5 = 7.5."
                     },
                     {
                         type: 'mcq',
-                        q: "Manakah deklarasi variabel bertipe karakter tunggal (char) yang benar di C++?",
-                        options: ["char huruf = \"A\";", "char huruf = 'A';", "char huruf = A;", "string huruf = 'A';"],
-                        answer: 1,
-                        explanation: "Tipe data char wajib menggunakan tanda petik tunggal ('A')."
-                    },
-                    {
-                        type: 'mcq',
-                        q: "Apa yang terjadi jika kita mencoba mengubah nilai variabel yang dideklarasikan dengan kata kunci const?",
+                        q: "Fungsi utama yang menjadi titik awal (entry point) eksekusi program C++ serta header wajib untuk perintah cout dan cin secara berturut-turut adalah...",
                         options: [
-                            "Nilai lama otomatis tertimpa",
-                            "Compiler akan menghasilkan pesan error",
-                            "Variabel berubah menjadi tipe string",
-                            "Program tetap berjalan normal"
+                            "start() dan #include <stdio.h>",
+                            "int main() dan #include <iostream>",
+                            "void main() dan #include <cmath>",
+                            "program() dan #include <string>"
                         ],
                         answer: 1,
-                        explanation: "const bersifat read-only (tetap), sehingga tidak bisa diubah setelah diinisialisasi."
+                        explanation: "int main() adalah fungsi utama C++, sedangkan <iostream> menyediakan objek cout dan cin."
                     },
                     {
                         type: 'mcq',
-                        q: "Manakah nama variabel yang VALID sesuai aturan penamaan C++?",
-                        options: ["2nilaiSiswa", "nilai siswa", "nilai_siswa2", "int"],
-                        answer: 2,
-                        explanation: "Nama variabel tidak boleh diawali angka, tidak boleh ada spasi, dan bukan keyword C++. nilai_siswa2 valid."
-                    },
-                    {
-                        type: 'mcq',
-                        q: "Berapakah hasil dari operasi modulo: 17 % 5 dalam C++?",
-                        options: ["3", "2", "3.4", "12"],
+                        q: "Manakah penulisan struktur pernyataan output standar C++ yang valid dan bebas dari syntax error?",
+                        options: [
+                            "cout >> \"Selamat Belajar\" >> endl;",
+                            "cout << \"Selamat Belajar\" << endl;",
+                            "cin << \"Selamat Belajar\";",
+                            "cout << 'Selamat Belajar' << endl"
+                        ],
                         answer: 1,
-                        explanation: "Operator % (modulo) menghasilkan sisa pembagian. 17 dibagi 5 adalah 3 bersisa 2."
+                        explanation: "cout menggunakan operator insersi <<, string memakai petik ganda \"...\", dan setiap pernyataan wajib diakhiri titik koma (;)."
+                    }
+                ]
+            },
+            {
+                id: 3,
+                title: "Variabel, Tipe Data & Konstanta",
+                subtitle: "unsigned int, double, float, string, const",
+                icon: "fa-box-open",
+                color: "from-blue-500 to-indigo-600",
+                summaryHTML: `
+                    <div class="space-y-4">
+                        <div class="bg-indigo-50 border-l-4 border-indigo-500 p-4 rounded-r-xl">
+                            <h4 class="font-bold text-indigo-950 text-base mb-1">1. Pemilihan Tipe Data yang Tepat & Efisien</h4>
+                            <p class="text-sm text-slate-700">Setiap variabel harus dideklarasikan dengan tipe data yang sesuai kapasitas dan jenis nilainya agar tidak terjadi <em>integer overflow</em> atau kehilangan ketelitian desimal.</p>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                            <div class="p-3 rounded-xl border border-slate-200 bg-white">
+                                <span class="font-mono font-bold text-blue-600 text-sm">unsigned int</span>
+                                <p class="text-slate-600 mt-1">Bilangan bulat non-negatif (0 hingga ~4,29 miliar). Efisien untuk jumlah penduduk ratusan juta tanpa overflow.</p>
+                            </div>
+                            <div class="p-3 rounded-xl border border-slate-200 bg-white">
+                                <span class="font-mono font-bold text-blue-600 text-sm">double vs float</span>
+                                <p class="text-slate-600 mt-1"><code>float</code> ketelitian ~7 digit desimal (akhiran <code>f</code>, misal <code>26.5f</code>). <code>double</code> ketelitian hingga ~15 digit desimal, cocok untuk rasio presisi tinggi maupun nominal triliunan.</p>
+                            </div>
+                            <div class="p-3 rounded-xl border border-slate-200 bg-white">
+                                <span class="font-mono font-bold text-blue-600 text-sm">string & char</span>
+                                <p class="text-slate-600 mt-1"><code>string</code> untuk teks/kode multi-karakter seperti <code>"IDN"</code> (memerlukan <code>#include &lt;string&gt;</code>). <code>char</code> untuk 1 karakter petik tunggal <code>'A'</code>.</p>
+                            </div>
+                            <div class="p-3 rounded-xl border border-slate-200 bg-white">
+                                <span class="font-mono font-bold text-blue-600 text-sm">const & Aturan Nama</span>
+                                <p class="text-slate-600 mt-1"><code>const double PHI = 3.14159;</code> membuat nilai konstanta tetap. Nama variabel <strong>tidak boleh diawali angka</strong>.</p>
+                            </div>
+                        </div>
+                    </div>
+                `,
+                questions: [
+                    {
+                        type: 'mcq',
+                        q: "Variabel totalPenduduk harus mampu menampung angka hingga 300.000.000 jiwa tanpa integer overflow, sementara variabel rasioPertumbuhan menyimpan angka desimal dengan ketelitian hingga 12 angka di belakang koma. Pasangan tipe data C++ yang paling tepat dan efisien untuk kedua variabel tersebut adalah ....",
+                        options: [
+                            "short int dan float",
+                            "unsigned int dan double",
+                            "int dan float",
+                            "char dan long double",
+                            "bool dan double"
+                        ],
+                        answer: 1,
+                        explanation: "unsigned int menampung hingga 4.294.967.295 (cukup untuk 300 juta), sedangkan double memiliki presisi hingga 15 digit desimal (float hanya ~7 digit)."
+                    },
+                    {
+                        type: 'mcq',
+                        q: "Dalam sistem perbankan internasional, variabel kodeNegara hanya menyimpan 3 huruf kapital (contoh: \"IDN\"), sedangkan variabel saldoNasabah harus menampung nilai nominal hingga triliunan rupiah beserta nilai sen di belakang koma. Dua tipe data C++ yang paling tepat secara berurutan adalah ....",
+                        options: [
+                            "char dan int",
+                            "string dan double",
+                            "string dan float",
+                            "bool dan long int"
+                        ],
+                        answer: 1,
+                        explanation: "Teks \"IDN\" terdiri dari 3 karakter sehingga menggunakan string, sedangkan nominal triliunan dengan angka sen desimal membutuhkan ketelitian double."
+                    },
+                    {
+                        type: 'mcq_multi',
+                        q: "Manakah pernyataan terkait deklarasi variabel, tipe data, dan konstanta dalam bahasa C++ berikut yang VALID dan sesuai aturan sintaksis?",
+                        options: [
+                            "const double PHI = 3.14159; mendeklarasikan konstanta yang nilainya tidak dapat diubah selama program berjalan.",
+                            "int 2nilaiUjian = 90; adalah deklarasi variabel yang sah karena diawali dengan tipe data int.",
+                            "string namaSiswa = \"Budi Santoso\"; membutuhkan pustaka #include <string> agar dapat dikompilasi dengan standar C++.",
+                            "char grade = \"A\"; adalah inisialisasi karakter yang benar karena menggunakan tanda petik ganda.",
+                            "float suhuRuangan = 26.5f; menggunakan akhiran f untuk menandakan literal bertipe float bukan double."
+                        ],
+                        answers: [0, 2, 4],
+                        explanation: "Pernyataan 1, 3, dan 5 valid. Pernyataan 2 salah karena nama variabel tidak boleh diawali angka (2nilaiUjian), dan pernyataan 4 salah karena char wajib petik tunggal ('A')."
                     }
                 ]
             },
             {
                 id: 4,
                 title: "Percabangan C++",
-                subtitle: "if-else, nested if, switch-case",
+                subtitle: "Nested if-else & switch-case (fall-through)",
                 icon: "fa-code-branch",
                 color: "from-violet-500 to-purple-600",
                 summaryHTML: `
                     <div class="space-y-4">
                         <div class="bg-purple-50 border-l-4 border-purple-500 p-4 rounded-r-xl">
-                            <h4 class="font-bold text-purple-950 text-base mb-1">1. Struktur Pengambilan Keputusan</h4>
-                            <p class="text-sm text-slate-700">Percabangan memungkinkan program memilih jalur eksekusi kode berdasarkan kondisi bernilai <code>true</code> atau <code>false</code>.</p>
+                            <h4 class="font-bold text-purple-950 text-base mb-1">1. Percabangan Bertingkat & Seleksi Kasus</h4>
+                            <p class="text-sm text-slate-700">Pemilihan struktur percabangan bergantung pada jenis kondisi yang diuji: rentang nilai vs nilai eksak tunggal.</p>
                         </div>
 
                         <div class="space-y-2 text-xs sm:text-sm text-slate-700">
-                            <p><strong>A. if - else if - else:</strong> Digunakan untuk mengevaluasi banyak kondisi berentang dari atas ke bawah (misal konversi nilai A, B, C).</p>
-                            <p><strong>B. Nested if (If Bersarang):</strong> Struktur <code>if</code> di dalam <code>if</code> lainnya. Cocok untuk pengecekan bertingkat seperti validasi Username lalu Password.</p>
-                            <p><strong>C. switch-case:</strong> Cocok untuk nilai pasti/diskrit (<code>int</code> atau <code>char</code>). Wajib menyertakan <code>break;</code> agar tidak terjadi <em>fall-through</em> (mengeksekusi case di bawahnya), serta <code>default:</code> sebagai cadangan.</p>
+                            <p><strong>A. Nested if & Rentang Nilai:</strong> Struktur <code>if-else</code> digunakan ketika menguji rentang nilai (misal <code>ipk >= 3.50</code> atau <code>totalBelanja >= 200000</code>) serta kondisi bersarang (status member).</p>
+                            <p><strong>B. Mekanisme Fall-Through pada switch-case:</strong> Struktur <code>switch</code> hanya memeriksa kesesuaian nilai konstan/eksak (<code>int</code> atau <code>char</code>). Jika sebuah <code>case</code> yang cocok <strong>tidak memiliki perintah <code>break;</code></strong>, eksekusi akan terus turun menjalankan perintah pada <code>case</code> di bawahnya hingga bertemu <code>break;</code>.</p>
                         </div>
 
-<pre class="code-block"><span class="type">int</span> nilai = <span class="num">80</span>;
-<span class="kw">if</span> (nilai >= <span class="num">85</span>) {
-    cout &lt;&lt; <span class="str">"Grade: A"</span>;
-} <span class="kw">else if</span> (nilai >= <span class="num">75</span>) {
-    cout &lt;&lt; <span class="str">"Grade: B"</span>; <span class="cmt">// Blok ini dijalankan</span>
-} <span class="kw">else</span> {
-    cout &lt;&lt; <span class="str">"Grade: C"</span>;
-}
-
-<span class="cmt">// Contoh switch-case</span>
-<span class="type">char</span> menu = <span class="str">'1'</span>;
-<span class="kw">switch</span> (menu) {
-    <span class="kw">case</span> <span class="str">'1'</span>: cout &lt;&lt; <span class="str">"Nasi Goreng"</span>; <span class="kw">break</span>;
-    <span class="kw">default</span>: cout &lt;&lt; <span class="str">"Menu tidak ada"</span>;
+<pre class="code-block"><span class="type">char</span> kodePaket = <span class="str">'B'</span>;
+<span class="kw">switch</span> (kodePaket) {
+    <span class="kw">case</span> <span class="str">'A'</span>: cout &lt;&lt; <span class="str">"Paket Hemat "</span>;
+    <span class="kw">case</span> <span class="str">'B'</span>: cout &lt;&lt; <span class="str">"Paket Reguler "</span>; <span class="cmt">// Cocok, tapi tanpa break!</span>
+    <span class="kw">case</span> <span class="str">'C'</span>: cout &lt;&lt; <span class="str">"Paket Sultan "</span>; <span class="kw">break</span>; <span class="cmt">// Ikut tercetak lalu berhenti</span>
+    <span class="kw">default</span>: cout &lt;&lt; <span class="str">"Kode Salah"</span>;
 }</pre>
                     </div>
                 `,
                 questions: [
                     {
                         type: 'mcq',
-                        q: "Apa yang terjadi pada struktur switch-case jika kita lupa menuliskan perintah 'break;' pada sebuah case yang cocok?",
+                        q: "Pada kode kasir minimarket: if (totalBelanja >= 200000) { if (isMember) diskon = 20; else diskon = 10; } else if (totalBelanja >= 100000) { if (isMember) diskon = 10; } int bayar = totalBelanja - (totalBelanja * diskon / 100); Jika pelanggan berstatus isMember = false dan berbelanja sebesar 250000, berapakah nilai variabel bayar?",
+                        options: ["250000", "225000", "200000", "237500", "175000"],
+                        answer: 1,
+                        explanation: "totalBelanja (250000) >= 200000 bernilai true, lalu masuk ke else karena isMember = false sehingga diskon = 10%. bayar = 250000 - (250000 * 10 / 100) = 225000."
+                    },
+                    {
+                        type: 'mcq',
+                        q: "Pada kode switch(kodePaket) dengan kodePaket = 'B', case 'B' mencetak \"Paket Reguler \" tanpa pernyataan break, diikuti case 'C' yang mencetak \"Paket Sultan \" dan memiliki break;. Apa yang terjadi saat program dieksekusi?",
                         options: [
-                            "Program langsung berhenti total",
-                            "Terjadi error kompilasi",
-                            "Kode pada case-case di bawahnya ikut dieksekusi (fall-through)",
-                            "Variabel otomatis direset menjadi 0"
+                            "Program hanya mencetak \"Paket Reguler \" karena nilai kodePaket cocok dengan case 'B'.",
+                            "Program mengalami syntax error karena tidak ada pernyataan break pada case 'A' dan case 'B'.",
+                            "Program mencetak \"Paket Reguler Paket Sultan \" karena terjadi mekanisme fall-through akibat absennya pernyataan break pada case 'B'.",
+                            "Program mencetak \"Paket Hemat Paket Reguler Paket Sultan \" karena seluruh case sebelum break akan dieksekusi dari atas ke bawah.",
+                            "Program mencetak \"Paket Reguler Kode Salah\" karena default selalu dijalankan di akhir blok switch."
                         ],
                         answer: 2,
-                        explanation: "Tanpa break, C++ akan terus menjalankan blok case berikutnya hingga menemukan break atau akhir blok switch."
+                        explanation: "Eksekusi melompat langsung ke case 'B' (case 'A' dilewati), mencetak \"Paket Reguler \", lalu jatuh (fall-through) ke case 'C' mencetak \"Paket Sultan \" dan berhenti di break."
                     },
                     {
                         type: 'mcq',
-                        q: "Perhatikan potongan kode: int x = 10; if (x > 5) { if (x < 8) cout << \"A\"; else cout << \"B\"; } Outputnya adalah...",
-                        options: ["A", "B", "AB", "Tidak ada output"],
-                        answer: 1,
-                        explanation: "x > 5 bernilai true (10 > 5), lalu masuk ke inner if: x < 8 bernilai false, sehingga mengeksekusi blok else yaitu 'B'."
-                    },
-                    {
-                        type: 'mcq',
-                        q: "Struktur percabangan yang paling sesuai untuk membuat pilihan menu angka 1 sampai 5 adalah...",
-                        options: ["if tunggal", "switch-case", "for loop", "array 1D"],
-                        answer: 1,
-                        explanation: "switch-case dirancang khusus untuk mengevaluasi nilai eksak/diskrit seperti nomor menu."
-                    },
-                    {
-                        type: 'mcq',
-                        q: "Pada struktur if - else if - else, bagian 'else' paling bawah akan dijalankan apabila...",
+                        q: "Mengapa kode percabangan if-else lebih tepat digunakan untuk memeriksa kategori nilai IPK (misalnya ipk >= 3.50) dibandingkan menggunakan struktur switch-case?",
                         options: [
-                            "Kondisi pertama bernilai true",
-                            "Semua kondisi if dan else if di atasnya bernilai false",
-                            "Program mengalami error",
-                            "Terdapat lebih dari 3 kondisi"
+                            "Karena switch-case tidak bisa digunakan di dalam fungsi main()",
+                            "Karena switch hanya memeriksa kesesuaian nilai konstan tertentu (case), bukan rentang nilai maupun tipe data pecahan/double",
+                            "Karena if-else tidak memerlukan tanda kurung kurawal",
+                            "Karena switch-case hanya dapat menampung maksimal 2 pilihan"
                         ],
                         answer: 1,
-                        explanation: "Blok else bertindak sebagai jalur cadangan jika seluruh syarat sebelumnya tidak terpenuhi."
-                    },
-                    {
-                        type: 'mcq',
-                        q: "Tipe data variabel yang DAPAT digunakan sebagai ekspresi pada switch(variabel) di C++ adalah...",
-                        options: ["float dan double", "string", "int dan char", "array"],
-                        answer: 2,
-                        explanation: "switch di C++ hanya mendukung tipe data integral seperti int, char, dan enum."
+                        explanation: "switch-case hanya mendukung perbandingan kesamaan (==) pada tipe integral (int/char) dan tidak bisa mengevaluasi rentang (>=) maupun tipe double."
                     }
                 ]
             },
             {
                 id: 5,
                 title: "Perulangan (Looping)",
-                subtitle: "for, while, do-while, break & continue",
+                subtitle: "for, while, dan do-while loop",
                 icon: "fa-rotate",
                 color: "from-fuchsia-500 to-pink-600",
                 summaryHTML: `
                     <div class="space-y-4">
                         <div class="bg-pink-50 border-l-4 border-pink-500 p-4 rounded-r-xl">
-                            <h4 class="font-bold text-pink-950 text-base mb-1">1. Tiga Jenis Perulangan Utama di C++</h4>
-                            <p class="text-sm text-slate-700">Perulangan digunakan untuk mengeksekusi blok kode secara berulang selama kondisi bernilai <code>true</code>.</p>
+                            <h4 class="font-bold text-pink-950 text-base mb-1">1. Analisis Iterasi for, while & do-while</h4>
+                            <p class="text-sm text-slate-700">Memahami nilai awal (inisialisasi), syarat berhenti (kondisi), dan langkah perubahan (<em>increment/step</em>) adalah kunci menelusuri keluaran perulangan.</p>
                         </div>
 
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                            <div class="p-3 rounded-xl border border-slate-200 bg-white">
-                                <span class="font-bold text-pink-600 text-sm">1. for loop</span>
-                                <p class="text-slate-600 mt-1">Digunakan jika <strong>jumlah perulangan sudah pasti</strong>. Format: <code>for(init; kondisi; update)</code>.</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                            <div class="p-3.5 rounded-xl border border-slate-200 bg-white">
+                                <span class="font-bold text-pink-600 text-sm">Penelusuran for dengan Step += 3</span>
+                                <p class="text-slate-600 mt-1">Pada <code>for (int i = 2; i &lt;= 12; i += 3)</code>, nilai <code>i</code> yang diproses berturut-turut adalah: <strong>2, 5, 8, 11</strong> (saat <code>i = 14</code>, syarat <code>14 &lt;= 12</code> salah sehingga loop berhenti).</p>
                             </div>
-                            <div class="p-3 rounded-xl border border-slate-200 bg-white">
-                                <span class="font-bold text-pink-600 text-sm">2. while loop</span>
-                                <p class="text-slate-600 mt-1">Cek kondisi di <strong>awal</strong>. Jika kondisi awal <code>false</code>, blok kode tidak dijalankan sama sekali.</p>
-                            </div>
-                            <div class="p-3 rounded-xl border border-slate-200 bg-white">
-                                <span class="font-bold text-pink-600 text-sm">3. do-while loop</span>
-                                <p class="text-slate-600 mt-1">Cek kondisi di <strong>akhir</strong>. Dijamin mengeksekusi blok kode <strong>minimal 1 kali</strong> meski kondisi salah.</p>
+                            <div class="p-3.5 rounded-xl border border-slate-200 bg-white">
+                                <span class="font-bold text-pink-600 text-sm">Keunggulan do-while (Validasi PIN ATM)</span>
+                                <p class="text-slate-600 mt-1"><code>do-while</code> mengevaluasi kondisi di <strong>akhir blok</strong>, sehingga instruksi input PIN dijamin dieksekusi <strong>minimal 1 kali</strong> sebelum pengecekan kondisi pengulangan dilakukan.</p>
                             </div>
                         </div>
 
-                        <p class="text-xs text-slate-700"><strong>Kontrol Alur:</strong> <code>break</code> menghentikan paksa seluruh perulangan, sedangkan <code>continue</code> melewati sisa iterasi saat ini dan lanjut ke putaran berikutnya.</p>
-
-<pre class="code-block"><span class="kw">for</span> (<span class="type">int</span> i = <span class="num">1</span>; i &lt;= <span class="num">5</span>; i++) {
-    <span class="kw">if</span> (i == <span class="num">3</span>) <span class="kw">continue</span>; <span class="cmt">// Angka 3 dilewati</span>
-    <span class="kw">if</span> (i == <span class="num">5</span>) <span class="kw">break</span>;    <span class="cmt">// Berhenti saat i = 5</span>
-    cout &lt;&lt; i &lt;&lt; <span class="str">" "</span>;     <span class="cmt">// Output: 1 2 4</span>
-}</pre>
+<pre class="code-block"><span class="type">int</span> total = <span class="num">0</span>;
+<span class="kw">for</span> (<span class="type">int</span> i = <span class="num">2</span>; i &lt;= <span class="num">12</span>; i += <span class="num">3</span>) {
+    total += i; <span class="cmt">// 2 + 5 + 8 + 11 = 26</span>
+}
+cout &lt;&lt; total; <span class="cmt">// Output: 26</span></pre>
                     </div>
                 `,
                 questions: [
                     {
                         type: 'mcq',
-                        q: "Jenis perulangan yang menjamin blok kode di dalamnya dijalankan MINIMAL 1 KALI walaupun kondisi awalnya salah (false) adalah...",
-                        options: ["for loop", "while loop", "do-while loop", "nested loop"],
-                        answer: 2,
-                        explanation: "do-while mengevaluasi kondisi di akhir blok, sehingga iterasi pertama pasti dijalankan."
-                    },
-                    {
-                        type: 'mcq',
-                        q: "Apa output dari kode berikut? for(int i=1; i<=5; i++) { if(i==3) continue; cout << i; }",
-                        options: ["12345", "12", "1245", "3"],
-                        answer: 2,
-                        explanation: "Saat i == 3, perintah continue melewati cout << i dan langsung lanjut ke i = 4. Output: 1245."
-                    },
-                    {
-                        type: 'mcq',
-                        q: "Perintah dalam perulangan yang berfungsi untuk menghentikan paksa loop saat itu juga dan langsung keluar dari blok perulangan adalah...",
-                        options: ["continue", "return", "break", "skip"],
-                        answer: 2,
-                        explanation: "break menghentikan seluruh siklus perulangan secara langsung."
-                    },
-                    {
-                        type: 'mcq',
-                        q: "Berapa kali kata 'Halo' dicetak oleh kode: int x = 10; while(x < 5) { cout << \"Halo\"; x++; }",
-                        options: ["0 kali (tidak dicetak)", "1 kali", "5 kali", "Tak terhingga"],
-                        answer: 0,
-                        explanation: "while memeriksa kondisi di awal. Karena 10 < 5 bernilai false, isi loop tidak pernah dieksekusi."
-                    },
-                    {
-                        type: 'mcq',
-                        q: "Pada struktur nested loop (perulangan bersarang) untuk membuat pola bintang segitiga, loop luar (outer loop) biasanya mengatur...",
-                        options: ["Jumlah kolom ke samping", "Jumlah baris ke bawah", "Warna teks", "Kecepatan prosesor"],
+                        q: "Perhatikan struktur perulangan for berikut ini: int total = 0; for (int i = 2; i <= 12; i += 3) { total += i; } cout << total; Berapakah nilai akhir dari variabel total yang tercetak?",
+                        options: ["15", "26", "40", "22", "24"],
                         answer: 1,
-                        explanation: "Outer loop (i) mengontrol pergantian baris (endl), sedangkan inner loop (j) mencetak bintang per kolom."
+                        explanation: "Nilai i yang memenuhi i <= 12 adalah 2, 5, 8, dan 11. Jumlahnya: 2 + 5 + 8 + 11 = 26."
+                    },
+                    {
+                        type: 'mcq',
+                        q: "Dalam merancang fitur verifikasi PIN pada mesin ATM digital, programmer harus memastikan pengguna memasukkan 6 digit PIN setidaknya satu kali sebelum sistem memeriksa validitasnya. Mengapa struktur perulangan do-while dinilai lebih tepat dibandingkan while untuk kasus ini?",
+                        options: [
+                            "Karena do-while memiliki kecepatan eksekusi kompilasi yang lebih tinggi dibandingkan while.",
+                            "Karena do-while mengevaluasi kondisi di akhir blok, sehingga instruksi pembacaan input PIN dijamin dieksekusi minimal satu kali sebelum pengecekan kondisi pengulangan.",
+                            "Karena while tidak dapat digunakan untuk memeriksa kondisi bertipe boolean maupun operator logika majemuk.",
+                            "Karena do-while secara otomatis menghentikan perulangan setelah 3 kali iterasi tanpa perlu variabel penghitung (counter).",
+                            "Karena while hanya dapat digunakan apabila jumlah perulangan sudah diketahui secara pasti sejak awal program dijalankan."
+                        ],
+                        answer: 1,
+                        explanation: "do-while adalah post-test loop yang menjalankan blok kode minimal 1 kali terlebih dahulu sebelum memeriksa kondisi perulangan di akhir."
+                    },
+                    {
+                        type: 'mcq_multi',
+                        q: "Perhatikan kode: int angka = 10; for (int i = 1; i <= angka; i++) { if (i % 2 == 0) { cout << i << \" \"; } } Pilih SEMUA pernyataan yang benar mengenai cara kerja program tersebut!",
+                        options: [
+                            "Variabel angka memiliki nilai 10.",
+                            "Perulangan dimulai dari nilai i = 0.",
+                            "Perulangan berjalan sebanyak 10 kali jika tidak dihentikan lebih awal.",
+                            "Kondisi i % 2 == 0 digunakan untuk memeriksa bilangan genap.",
+                            "Output program adalah 1 3 5 7 9."
+                        ],
+                        answers: [0, 2, 3],
+                        explanation: "Variabel angka bernilai 10, perulangan dari i=1 sampai 10 berjalan 10 kali, dan i % 2 == 0 menyeleksi bilangan genap (output: 2 4 6 8 10)."
                     }
                 ]
             },
             {
                 id: 6,
-                title: "Fungsi (void & return)",
-                subtitle: "Analogi Mesin Pemproses & Parameter",
+                title: "Fungsi (void, return & Reference)",
+                subtitle: "Pass by Value vs Pass by Reference (&)",
                 icon: "fa-gears",
                 color: "from-rose-500 to-orange-500",
                 summaryHTML: `
                     <div class="space-y-4">
                         <div class="bg-orange-50 border-l-4 border-orange-500 p-4 rounded-r-xl">
-                            <h4 class="font-bold text-orange-950 text-base mb-1">1. Analogi Fungsi sebagai "Mesin Pemproses"</h4>
-                            <p class="text-sm text-slate-700">Fungsi adalah blok kode terpisah untuk tugas tertentu agar kode rapi dan dapat digunakan ulang (<em>reusability</em>). Bayangkan fungsi sebagai mesin: menerima <strong>Input (Parameter)</strong> &rarr; <strong>Proses</strong> &rarr; menghasilkan <strong>Output (Return)</strong>.</p>
+                            <h4 class="font-bold text-orange-950 text-base mb-1">1. Fungsi void, return, dan Pengiriman Parameter</h4>
+                            <p class="text-sm text-slate-700">Selain membedakan fungsi tanpa kembalian (<code>void</code>) dan fungsi bernilai balik (<code>return</code>), C++ memiliki dua cara pengiriman parameter ke dalam fungsi:</p>
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                             <div class="p-3.5 rounded-xl border border-slate-200 bg-white">
-                                <span class="font-bold text-rose-600 text-sm">A. Fungsi Tanpa Kembalian (void)</span>
-                                <p class="text-slate-600 mt-1">Seperti mesin pencetak layar/stempel. Menggunakan kata kunci <code>void</code>, tidak wajib pakai <code>return</code>, dan dipanggil langsung sebagai instruksi (misal: <code>cetakHeader();</code>).</p>
+                                <span class="font-bold text-rose-600 text-sm">1. Pass by Value (void ubahA(int x))</span>
+                                <p class="text-slate-600 mt-1">Hanya menyalin nilai variabel ke parameter <code>x</code>. Perubahan di dalam fungsi <strong>tidak mengubah variabel asli</strong> di <code>main()</code>.</p>
                             </div>
                             <div class="p-3.5 rounded-xl border border-slate-200 bg-white">
-                                <span class="font-bold text-emerald-600 text-sm">B. Fungsi Dengan Kembalian (return)</span>
-                                <p class="text-slate-600 mt-1">Seperti mesin pembuat jus. Menggunakan tipe data (<code>int</code>, <code>double</code>, <code>bool</code>, <code>string</code>) dan wajib mengembalikan nilai dengan <code>return</code> untuk disimpan ke variabel atau dicetak.</p>
+                                <span class="font-bold text-emerald-600 text-sm">2. Pass by Reference (void ubahB(int &y))</span>
+                                <p class="text-slate-600 mt-1">Tanda <code>&</code> mengirimkan alamat memori asli variabel. Perubahan pada <code>y</code> di dalam fungsi <strong>langsung mengubah nilai variabel asli</strong> di <code>main()</code>.</p>
                             </div>
                         </div>
 
-<pre class="code-block"><span class="cmt">// 1. Fungsi void (tanpa nilai kembalian)</span>
-<span class="type">void</span> <span class="fn">cetakGaris</span>(<span class="type">int</span> panjang) {
-    <span class="kw">for</span> (<span class="type">int</span> i = <span class="num">0</span>; i &lt; panjang; i++) cout &lt;&lt; <span class="str">"="</span>;
-    cout &lt;&lt; endl;
-}
-
-<span class="cmt">// 2. Fungsi dengan nilai kembalian (double)</span>
-<span class="type">double</span> <span class="fn">luasPersegiPanjang</span>(<span class="type">double</span> p, <span class="type">double</span> l) {
-    <span class="kw">return</span> p * l;
-}
+<pre class="code-block"><span class="type">void</span> <span class="fn">ubahNilaiA</span>(<span class="type">int</span> x) { x = x + <span class="num">10</span>; }   <span class="cmt">// Pass by value</span>
+<span class="type">void</span> <span class="fn">ubahNilaiB</span>(<span class="type">int</span> &amp;y) { y = y + <span class="num">10</span>; }  <span class="cmt">// Pass by reference</span>
 
 <span class="type">int</span> <span class="fn">main</span>() {
-    <span class="fn">cetakGaris</span>(<span class="num">20</span>);
-    <span class="type">double</span> hasil = <span class="fn">luasPersegiPanjang</span>(<span class="num">8</span>, <span class="num">5</span>); <span class="cmt">// hasil = 40</span>
-    cout &lt;&lt; <span class="str">"Luas: "</span> &lt;&lt; hasil;
-    <span class="kw">return</span> <span class="num">0</span>;
+    <span class="type">int</span> p = <span class="num">5</span>, q = <span class="num">5</span>;
+    <span class="fn">ubahNilaiA</span>(p); <span class="cmt">// p tetap 5</span>
+    <span class="fn">ubahNilaiB</span>(q); <span class="cmt">// q berubah menjadi 15</span>
+    cout &lt;&lt; p &lt;&lt; <span class="str">" "</span> &lt;&lt; q; <span class="cmt">// Output: 5 15</span>
 }</pre>
                     </div>
                 `,
                 questions: [
                     {
                         type: 'mcq',
-                        q: "Kata kunci yang digunakan untuk mendeklarasikan fungsi yang TIDAK mengembalikan nilai apa pun ke pemanggilnya adalah...",
-                        options: ["int", "return", "void", "null"],
-                        answer: 2,
-                        explanation: "void menandakan fungsi hanya menjalankan prosedur/aksi tanpa nilai balik."
-                    },
-                    {
-                        type: 'mcq',
-                        q: "Perhatikan fungsi: int kaliDua(int x) { return 2 * x; }. Jika dipanggil int a = kaliDua(6); maka nilai a adalah...",
-                        options: ["6", "8", "12", "Error"],
-                        answer: 2,
-                        explanation: "Parameter x diisi 6, lalu fungsi mengembalikan 2 * 6 = 12 ke variabel a."
-                    },
-                    {
-                        type: 'mcq',
-                        q: "Manakah pernyataan yang BENAR mengenai perbedaan fungsi void dan fungsi ber-return?",
+                        q: "Perhatikan kode: void hitungLuasPersegi(int sisi) { int luas = sisi * sisi; cout << \"Luas: \" << luas << endl; } int main() { int hasil = hitungLuasPersegi(5) + 10; ... } Mengapa kode tersebut menghasilkan error saat dikompilasi?",
                         options: [
-                            "Fungsi void bisa disimpan ke dalam variabel (misal: int x = fungsiVoid();)",
-                            "Fungsi ber-return wajib memiliki pernyataan return yang sesuai tipe datanya",
-                            "Fungsi void tidak boleh memiliki parameter",
-                            "Fungsi ber-return hanya boleh bertipe int"
+                            "Parameter sisi pada fungsi hitungLuasPersegi seharusnya bertipe double, bukan int.",
+                            "Fungsi hitungLuasPersegi bertipe void sehingga tidak mengembalikan nilai (return value) yang dapat dijumlahkan dengan angka 10 di dalam fungsi main().",
+                            "Variabel luas di dalam fungsi hitungLuasPersegi bersifat lokal sehingga tidak bisa diakses oleh fungsi main().",
+                            "Pemanggilan fungsi hitungLuasPersegi(5) seharusnya diletakkan di atas deklarasi fungsi main() menggunakan prototype.",
+                            "Operator penjumlahan + tidak dapat digunakan secara langsung pada hasil pemanggilan fungsi dalam bahasa C++."
                         ],
                         answer: 1,
-                        explanation: "Fungsi non-void wajib mengembalikan nilai dengan return sesuai tipe data deklarasinya."
+                        explanation: "Fungsi bertipe void tidak menghasilkan nilai balik (return value), sehingga ekspresi hitungLuasPersegi(5) + 10 tidak valid secara tipe."
                     },
                     {
-                        type: 'mcq',
-                        q: "Jika kita ingin membuat fungsi apakahGenap(int angka) yang menghasilkan true atau false, tipe data kembalian fungsi tersebut adalah...",
-                        options: ["void", "int", "bool", "char"],
-                        answer: 2,
-                        explanation: "Tipe data boolean (bool) digunakan untuk mengembalikan nilai kebenaran true atau false."
-                    },
-                    {
-                        type: 'mcq',
-                        q: "Variabel yang dituliskan di dalam tanda kurung saat mendeklarasikan fungsi seperti void sapa(string nama) disebut...",
-                        options: ["Konstanta", "Parameter", "Indeks", "Header"],
-                        answer: 1,
-                        explanation: "Variabel penerima input pada definisi fungsi disebut parameter."
+                        type: 'mcq_multi',
+                        q: "Diketahui: void ubahNilaiA(int x) { x = x + 10; } dan void ubahNilaiB(int &y) { y = y + 10; }. Di dalam main(), int p = 5, q = 5; lalu dipanggil ubahNilaiA(p); dan ubahNilaiB(q);. Pilih SEMUA kesimpulan yang tepat!",
+                        options: [
+                            "Nilai awal variabel p adalah 5.",
+                            "Fungsi ubahNilaiB mengubah nilai variabel q menjadi 15.",
+                            "Fungsi ubahNilaiA mengubah nilai asli variabel p menjadi 15.",
+                            "Kedua fungsi menggunakan cara yang sama dalam mengubah nilai variabel.",
+                            "Output program adalah 5 15."
+                        ],
+                        answers: [0, 1, 4],
+                        explanation: "ubahNilaiA menerima salinan nilai (pass by value) sehingga p tetap 5, sedangkan ubahNilaiB memakai referensi (&y) sehingga q berubah menjadi 15. Output: 5 15."
                     }
                 ]
             },
             {
                 id: 7,
-                title: "Array 1D & 2D",
-                subtitle: "Loker Indeks 0 & Matriks Baris-Kolom",
+                title: "Array 1D & 2D (Matriks)",
+                subtitle: "Manipulasi Indeks, Out-of-Bounds & Diagonal Utama",
                 icon: "fa-table-cells",
                 color: "from-amber-500 to-yellow-600",
                 summaryHTML: `
                     <div class="space-y-4">
                         <div class="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-xl">
-                            <h4 class="font-bold text-amber-950 text-base mb-1">1. Analogi Array: Loker Bernomor Indeks dari 0</h4>
-                            <p class="text-sm text-slate-700">Array adalah struktur penyimpanan yang menampung banyak data bertipe sama dalam satu nama variabel. Nomor urut kotak (indeks) <strong>selalu dimulai dari 0</strong>!</p>
+                            <h4 class="font-bold text-amber-950 text-base mb-1">1. Aturan Indeks Array 1D & Matriks 2D</h4>
+                            <p class="text-sm text-slate-700">Array berukuran <code>N</code> memiliki rentang indeks valid dari <code>0</code> sampai <code>N - 1</code>. Mengakses indeks <code>N</code> (seperti <code>nilai[5]</code> pada array <code>int nilai[5]</code>) menyebabkan akses di luar batas array (<em>out-of-bounds / error</em>).</p>
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                             <div class="p-3.5 rounded-xl border border-slate-200 bg-white">
-                                <span class="font-bold text-amber-700 text-sm">Array 1 Dimensi (Satu Baris)</span>
-                                <p class="text-slate-600 mt-1">Contoh: <code>int nilai[4] = {70, 80, 90, 85};</code>. Elemen pertama adalah <code>nilai[0]</code> (70), dan elemen terakhir adalah <code>nilai[3]</code> (85).</p>
+                                <span class="font-bold text-amber-700 text-sm">Array 2 Dimensi matriks[baris][kolom]</span>
+                                <p class="text-slate-600 mt-1">Pada <code>int matriks[3][4]</code>, indeks baris yang sah adalah <code>0..2</code> dan kolom <code>0..3</code>. Elemen <code>matriks[2][1]</code> artinya baris ke-3 (indeks 2), kolom ke-2 (indeks 1).</p>
                             </div>
                             <div class="p-3.5 rounded-xl border border-slate-200 bg-white">
-                                <span class="font-bold text-amber-700 text-sm">Array 2 Dimensi (Tabel / Matriks)</span>
-                                <p class="text-slate-600 mt-1">Memiliki baris dan kolom: <code>int matriks[baris][kolom];</code>. Diakses menggunakan dua perulangan bersarang (nested loop <code>i</code> dan <code>j</code>).</p>
+                                <span class="font-bold text-amber-700 text-sm">Diagonal Utama Matriks Persegi</span>
+                                <p class="text-slate-600 mt-1">Elemen diagonal utama matriks persegi terletak pada posisi di mana <strong>indeks baris sama dengan indeks kolom (<code>i == j</code>)</strong>, yaitu <code>[0][0], [1][1], [2][2], [3][3]</code>.</p>
                             </div>
                         </div>
-
-<pre class="code-block"><span class="cmt">// Array 1 Dimensi</span>
-<span class="type">int</span> skor[<span class="num">3</span>] = {<span class="num">80</span>, <span class="num">95</span>, <span class="num">70</span>};
-cout &lt;&lt; skor[<span class="num">1</span>]; <span class="cmt">// Output: 95 (indeks ke-1)</span>
-
-<span class="cmt">// Array 2 Dimensi (Matriks 2x2)</span>
-<span class="type">int</span> M[<span class="num">2</span>][<span class="num">2</span>] = {
-    {<span class="num">3</span>, <span class="num">5</span>},
-    {<span class="num">7</span>, <span class="num">9</span>}
-};
-cout &lt;&lt; M[<span class="num">1</span>][<span class="num">0</span>]; <span class="cmt">// Baris 1, Kolom 0 -> Output: 7</span></pre>
                     </div>
                 `,
                 questions: [
                     {
                         type: 'mcq',
-                        q: "Nomor indeks pertama pada sebuah array di bahasa pemrograman C++ selalu dimulai dari angka...",
-                        options: ["1", "0", "-1", "Sesuai jumlah elemen"],
-                        answer: 1,
-                        explanation: "C++ menggunakan zero-based indexing, artinya elemen pertama berada pada indeks ke-0."
+                        q: "Diberikan array: int data[6] = {10, 20, 30, 40, 50, 60}; lalu dijalankan perulangan: for (int i = 0; i < 5; i++) { data[i] = data[i + 1] - 5; } Setelah perulangan selesai, nilai elemen array pada indeks ke-2 dan indeks ke-4 secara berturut-turut adalah ....",
+                        options: ["25 dan 55", "35 dan 45", "35 dan 55", "25 dan 45", "45 dan 45"],
+                        answer: 2,
+                        explanation: "Saat i=2: data[2] = data[3] - 5 = 40 - 5 = 35. Saat i=4: data[4] = data[5] - 5 = 60 - 5 = 55."
                     },
                     {
                         type: 'mcq',
-                        q: "Diketahui array: int angka[5] = {12, 24, 36, 48, 60}; Berapakah nilai dari angka[3] ?",
-                        options: ["36", "48", "60", "24"],
-                        answer: 1,
-                        explanation: "Indeks 0=12, indeks 1=24, indeks 2=36, indeks 3=48."
+                        q: "Potongan kode perulangan yang paling tepat untuk menghitung jumlah elemen pada diagonal utama dari sebuah matriks persegi berukuran 4 x 4 (int matriks[4][4]) adalah ....",
+                        options: [
+                            "for(int i = 0; i < 4; i++) { for(int j = 0; j < 4; j++) { total += matriks[i][j]; } }",
+                            "for(int i = 0; i < 4; i++) { for(int j = 0; j < 4; j++) { if(i != j) { total += matriks[i][j]; } } }",
+                            "for(int i = 0; i < 4; i++) { for(int j = 0; j < 4; j++) { if(i == j) { total += matriks[i][j]; } } }",
+                            "for(int i = 1; i <= 4; i++) { total += matriks[i][i]; }",
+                            "for(int i = 0; i < 4; i++) { total += matriks[0][i]; }"
+                        ],
+                        answer: 2,
+                        explanation: "Diagonal utama matriks memiliki syarat indeks baris sama dengan indeks kolom (i == j) dengan indeks mulai dari 0 sampai 3."
                     },
                     {
                         type: 'mcq',
-                        q: "Diketahui matriks: int A[2][3] = { {1, 2, 3}, {4, 5, 6} }; Elemen A[1][2] bernilai...",
-                        options: ["2", "3", "5", "6"],
-                        answer: 3,
-                        explanation: "Baris indeks 1 adalah {4, 5, 6}, dan kolom indeks 2 adalah elemen ketiganya yaitu 6."
+                        q: "Pada matriks 3x3: { {10,20,30}, {40,50,60}, {70,80,90} }, indeks yang menghasilkan nilai 80 adalah _____, dan jika array int nilai[5] diakses dengan nilai[5] maka akan terjadi _____.",
+                        options: [
+                            "[1][2] dan mencetak 88",
+                            "[2][1] dan error / akses di luar batas indeks (out-of-bounds)",
+                            "[3][2] dan mencetak 0",
+                            "[2][2] dan error kompilasi"
+                        ],
+                        answer: 1,
+                        explanation: "Angka 80 berada di baris indeks 2, kolom indeks 1 ([2][1]). Sedangkan array ukuran 5 hanya memiliki indeks 0..4, sehingga nilai[5] melewati batas indeks."
                     },
                     {
-                        type: 'mcq',
-                        q: "Jika sebuah array dideklarasikan dengan ukuran int data[10]; maka indeks maksimum yang valid diakses adalah...",
-                        options: ["10", "9", "11", "8"],
-                        answer: 1,
-                        explanation: "Untuk ukuran N, indeks yang valid adalah 0 hingga N-1 (yaitu 0 sampai 9)."
-                    },
-                    {
-                        type: 'mcq',
-                        q: "Struktur kontrol yang paling umum digunakan untuk menampilkan seluruh elemen Array 2 Dimensi (baris dan kolom) adalah...",
-                        options: ["switch-case tunggal", "Nested for loop (perulangan bersarang)", "if-else tunggal", "Operasi modulo"],
-                        answer: 1,
-                        explanation: "Loop luar mengiterasi indeks baris [i] dan loop dalam mengiterasi indeks kolom [j]."
+                        type: 'mcq_multi',
+                        q: "Diketahui: int matriks[3][4] = { {10, 20, 30, 40}, {50, 60, 70, 80}, {90, 100, 110, 120} }; Pilih SEMUA pernyataan yang benar terkait pengaksesan indeks array tersebut!",
+                        options: [
+                            "matriks[0][0] memiliki nilai 10.",
+                            "matriks[1][2] memiliki nilai 60.",
+                            "matriks[2][1] memiliki nilai 100.",
+                            "matriks[2][2] memiliki nilai 90.",
+                            "matriks[3][1] memiliki nilai 100."
+                        ],
+                        answers: [0, 2],
+                        explanation: "matriks[0][0] = 10 (benar) dan matriks[2][1] = 100 (benar). matriks[1][2] seharusnya 70, matriks[2][2] seharusnya 110, dan baris indeks 3 tidak ada."
                     }
                 ]
             },
             {
                 id: 8,
-                title: "BOSS LEVEL: Master C++",
-                subtitle: "Tantangan Kode Rumpang (Level 1 - 7)",
+                title: "BOSS LEVEL: Master Tantangan C++",
+                subtitle: "Analisis Kode Terpadu & Pemecahan Masalah",
                 icon: "fa-dragon",
                 isBoss: true,
                 color: "from-red-600 via-rose-600 to-amber-600",
@@ -1439,88 +1520,117 @@ cout &lt;&lt; M[<span class="num">1</span>][<span class="num">0</span>]; <span c
                             <div class="flex items-center gap-3">
                                 <i class="fa-solid fa-dragon text-3xl text-amber-200"></i>
                                 <div>
-                                    <h4 class="font-game text-lg font-bold">SELAMAT DATANG DI BOSS LEVEL 8!</h4>
-                                    <p class="text-xs text-rose-100">Ini adalah ujian akhir yang menggabungkan seluruh ilmu dari Level 1 hingga Level 7.</p>
+                                    <h4 class="font-game text-lg font-bold">BOSS LEVEL 8: DRAG & DROP MASTER C++</h4>
+                                    <p class="text-xs text-rose-100">Tantangan puncak gabungan seluruh materi pemrograman terstruktur C++ dari Level 1 hingga Level 7!</p>
                                 </div>
                             </div>
                         </div>
 
                         <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2 text-sm">
-                            <h5 class="font-bold text-slate-800">Aturan Tantangan Boss Level:</h5>
+                            <h5 class="font-bold text-slate-800">Cara Bermain Drag & Drop di Boss Level:</h5>
                             <ul class="list-disc pl-5 space-y-1 text-xs sm:text-sm text-slate-700">
-                                <li>Terdapat <strong>6 potongan program C++ rumpang</strong> (bagian kode kosong bertanda <code>[ ___ ]</code>).</li>
-                                <li>Setiap tantangan menguji gabungan: <strong>Tipe Data, Gerbang Logika, Percabangan, Perulangan, Fungsi void/return, serta Array 1D & 2D</strong>.</li>
-                                <li>Ketikkan jawaban sintaks C++ yang tepat pada kotak isian (tidak sensitif spasi berlebih).</li>
-                                <li>Raih skor minimal <strong>80% (minimal 5 dari 6 benar)</strong> untuk menamatkan seluruh game dan meraih gelar <strong>Master C++ SMK Muh 2 Ajibarang</strong>!</li>
+                                <li>Terdapat <strong>2 Arena Drag & Drop</strong> yang berisi 10 slot target pemecahan masalah kode C++.</li>
+                                <li><strong>Seret (Drag)</strong> balok jawaban dari Bank Pilihan ke kotak target <code>[ Letakkan Jawaban di Sini ]</code> yang sesuai.</li>
+                                <li><em>Tips Layar Sentuh / HP:</em> Kamu juga bisa <strong>mengetuk (tap)</strong> balok pilihan lalu mengetuk kotak target yang diinginkan!</li>
+                                <li>Raih skor minimal <strong>80% (minimal 8 dari 10 slot tepat)</strong> untuk menamatkan seluruh game!</li>
                             </ul>
                         </div>
-
-<pre class="code-block"><span class="cmt">// Contoh Pola Tantangan Fill-in-the-Blank:</span>
-<span class="type">int</span> <span class="fn">hitungTotal</span>(<span class="type">int</span> data[], <span class="type">int</span> n) {
-    <span class="type">int</span> total = <span class="num">0</span>;
-    <span class="kw">for</span> (<span class="type">int</span> i = <span class="num">0</span>; i &lt; n; i++) {
-        total += data[i];
-    }
-    <span class="kw">return</span> total; <span class="cmt">// &lt;-- Kata kunci yang harus dilengkapi!</span>
-}</pre>
                     </div>
                 `,
-                questions: [
+                // Struktur khusus Boss Level 8 berbentuk Drag & Drop penuh (total 10 slot penilaian)
+                dndGroups: [
                     {
-                        type: 'fill',
-                        q: "Tantangan 1 (Fungsi Return + Array 1D): Lengkapi kata kunci untuk mengembalikan hasil penjumlahan total elemen array!",
-                        codeBefore: `int hitungTotal(int nilai[], int n) {\n    int total = 0;\n    for (int i = 0; i < n; i++) {\n        total += nilai[i];\n    }\n    `,
-                        codeAfter: ` total;\n}`,
-                        placeholder: "ketik kata kunci...",
-                        validAnswers: ["return"],
-                        explanation: "Fungsi bertipe kembalian int wajib menggunakan kata kunci 'return' untuk mengirimkan nilai total."
+                        groupTitle: "Arena 1: Analisis Program Rekap Nilai Praktik",
+                        codeContext: `#include <iostream>\nusing namespace std;\n\nvoid tampilJudul() {                              // Baris A\n    cout << "=== REKAP NILAI PRAKTIK ===" << endl;\n}\ndouble hitungRata(int data[], int jumlah) {       // Baris B\n    int total = 0;\n    for (int i = 0; i < jumlah; i++) total += data[i];\n    return (double)total / jumlah;\n}\nint main() {\n    tampilJudul();\n    int nilai[4] = {80, 90, 70, 100};             // Baris C\n    double rata = hitungRata(nilai, 4);\n    bool hadirPenuh = true;\n    if (rata >= 80.0 && hadirPenuh)               // Baris D\n        cout << "Status: Lulus dengan Pujian";\n    else\n        cout << "Status: Lulus Standar";\n    return 0;\n}`,
+                        bank: [
+                            { id: "d1", text: "Fungsi tanpa nilai kembalian yang hanya mencetak ke layar." },
+                            { id: "d2", text: "Tipe data desimal yang menjadi nilai kembalian hitungRata." },
+                            { id: "d3", text: "70" },
+                            { id: "d4", text: "Gerbang logika AND yang menghasilkan nilai bertipe bool." },
+                            { id: "d5", text: "Status: Lulus Standar" },
+                            { id: "d6", text: "Tipe data karakter tunggal kembalian hitungRata." },
+                            { id: "d7", text: "Gerbang logika OR yang menghasilkan nilai bertipe int." }
+                        ],
+                        slots: [
+                            {
+                                id: "slot_1",
+                                prompt: "1. Karakteristik deklarasi fungsi void tampilJudul() pada Baris A:",
+                                correctChipId: "d1",
+                                explanation: "Fungsi void tidak mengembalikan nilai dan hanya menjalankan perintah cetak."
+                            },
+                            {
+                                id: "slot_2",
+                                prompt: "2. Alasan penggunaan kata kunci double di depan fungsi hitungRata (Baris B):",
+                                correctChipId: "d2",
+                                explanation: "Hasil pembagian rata-rata bisa berupa pecahan desimal sehingga bertipe double."
+                            },
+                            {
+                                id: "slot_3",
+                                prompt: "3. Nilai elemen yang tersimpan pada indeks nilai[2] di Baris C:",
+                                correctChipId: "d3",
+                                explanation: "Indeks 0=80, indeks 1=90, indeks 2=70."
+                            },
+                            {
+                                id: "slot_4",
+                                prompt: "4. Jenis gerbang logika dan tipe data pada (rata >= 80.0 && hadirPenuh) di Baris D:",
+                                correctChipId: "d4",
+                                explanation: "Operator && adalah gerbang logika AND yang menghasilkan tipe bool."
+                            },
+                            {
+                                id: "slot_5",
+                                prompt: "5. Pesan status yang dicetak apabila nilai variabel hadirPenuh diubah menjadi false:",
+                                correctChipId: "d5",
+                                explanation: "Karena AND bernilai false, program masuk ke blok else dan mencetak 'Status: Lulus Standar'."
+                            }
+                        ]
                     },
                     {
-                        type: 'fill',
-                        q: "Tantangan 2 (Gerbang Logika + Percabangan): Lengkapi operator logika AND agar siswa lulus HANYA JIKA nilai >= 75 DAN kehadiran >= 80!",
-                        codeBefore: `if (nilai >= 75 `,
-                        codeAfter: ` kehadiran >= 80) {\n    cout << "LULUS";\n}`,
-                        placeholder: "operator logika...",
-                        validAnswers: ["&&"],
-                        explanation: "Operator logika AND di C++ ditulis dengan simbol '&&'."
-                    },
-                    {
-                        type: 'fill',
-                        q: "Tantangan 3 (Array 2 Dimensi + Nested Loop): Lengkapi indeks baris dan kolom matriks M agar mencetak seluruh elemen matriks 2x2!",
-                        codeBefore: `int M[2][2] = {{1, 2}, {3, 4}};\nfor (int i = 0; i < 2; i++) {\n    for (int j = 0; j < 2; j++) {\n        cout << `,
-                        codeAfter: ` << " ";\n    }\n}`,
-                        placeholder: "contoh: A[x][y]",
-                        validAnswers: ["M[i][j]"],
-                        explanation: "Untuk mengakses elemen matriks M pada baris i dan kolom j digunakan sintaks 'M[i][j]'."
-                    },
-                    {
-                        type: 'fill',
-                        q: "Tantangan 4 (Fungsi Tanpa Kembalian): Lengkapi tipe data fungsi prosedur berikut agar tidak memerlukan perintah return!",
-                        codeBefore: ``,
-                        codeAfter: ` cetakGaris(int panjang) {\n    for (int i = 0; i < panjang; i++) {\n        cout << "=";\n    }\n}`,
-                        placeholder: "tipe fungsi...",
-                        validAnswers: ["void"],
-                        explanation: "Fungsi prosedur yang hanya mencetak output tanpa mengembalikan nilai dideklarasikan dengan 'void'."
-                    },
-                    {
-                        type: 'fill',
-                        q: "Tantangan 5 (Percabangan Switch-Case): Lengkapi perintah untuk menghentikan eksekusi agar tidak lanjut ke case berikutnya!",
-                        codeBefore: `switch (pilihan) {\n    case 1:\n        cout << "Mulai Game";\n        `,
-                        codeAfter: `\n    default:\n        cout << "Keluar";\n}`,
-                        placeholder: "perintah penghenti...",
-                        validAnswers: ["break;", "break"],
-                        explanation: "Perintah 'break;' digunakan untuk keluar dari blok switch setelah case yang cocok selesai dijalankan."
-                    },
-                    {
-                        type: 'fill',
-                        q: "Tantangan 6 (Struktur Dasar & Output C++): Lengkapi perintah standar C++ untuk mencetak teks rata-rata ke layar!",
-                        codeBefore: `#include <iostream>\nusing namespace std;\nint main() {\n    double rata = 88.5;\n    `,
-                        codeAfter: ` << "Rata-rata: " << rata << endl;\n    return 0;\n}`,
-                        placeholder: "perintah cetak...",
-                        validAnswers: ["cout"],
-                        explanation: "Objek 'cout' bersama operator << digunakan untuk menampilkan output ke layar konsol."
+                        groupTitle: "Arena 2: Pemecahan Masalah & Sintaks Kode C++",
+                        codeContext: null,
+                        bank: [
+                            { id: "e1", text: "string nama; int jumlah; bool status;" },
+                            { id: "e2", text: "for (int i = 1; i <= 5; i++) cout << i * 2 << \" \";" },
+                            { id: "e3", text: "Total Gaji: 3500000" },
+                            { id: "e4", text: "for (int i = 0; i < 4; i++) total += harga[i];" },
+                            { id: "e5", text: "matriks[1][1] = 10;" },
+                            { id: "e6", text: "char nama; float jumlah; int status;" },
+                            { id: "e7", text: "matriks[2][2] = 10;" }
+                        ],
+                        slots: [
+                            {
+                                id: "slot_6",
+                                prompt: "6. Deklarasi variabel perpustakaan (nama peminjam, jumlah buku, status kembali true/false):",
+                                correctChipId: "e1",
+                                explanation: "Nama menggunakan string, jumlah menggunakan int, dan status true/false menggunakan bool."
+                            },
+                            {
+                                id: "slot_7",
+                                prompt: "7. Konversi perulangan while (i=1..5; cout << i*2) menjadi bentuk perulangan for:",
+                                correctChipId: "e2",
+                                explanation: "Inisialisasi i = 1, kondisi i <= 5, dan update i++ mencetak 2 4 6 8 10."
+                            },
+                            {
+                                id: "slot_8",
+                                prompt: "8. Keluaran baris pertama dari pemanggilan hitungBonus(3000000) yang menambah bonus 500000:",
+                                correctChipId: "e3",
+                                explanation: "3000000 + 500000 menghasilkan Total Gaji: 3500000."
+                            },
+                            {
+                                id: "slot_9",
+                                prompt: "9. Potongan loop for untuk menjumlahkan seluruh elemen int harga[4] ke variabel total:",
+                                correctChipId: "e4",
+                                explanation: "Indeks array berukuran 4 dimulai dari i = 0 hingga i < 4."
+                            },
+                            {
+                                id: "slot_10",
+                                prompt: "10. Perintah C++ untuk mengubah angka 1 (baris indeks 1, kolom indeks 1) pada matriks[2][3] menjadi 10:",
+                                correctChipId: "e5",
+                                explanation: "Pada matriks {{4,7,2}, {9,1,5}}, angka 1 terletak pada baris ke-2 (indeks 1) dan kolom ke-2 (indeks 1) -> matriks[1][1] = 10;."
+                            }
+                        ]
                     }
-                ]
+                ],
+                questions: [] // Menggunakan dndGroups khusus Boss Level
             }
         ];
 
@@ -1932,60 +2042,129 @@ cout &lt;&lt; M[<span class="num">1</span>][<span class="num">0</span>]; <span c
             if (!levelObj) return;
 
             userQuizAnswers = {};
+            selectedDragChip = null;
             const prevAttempts = (currentStudent.attempts && currentStudent.attempts[String(levelObj.id)]) || 0;
 
             document.getElementById('modal-stage-pill').textContent = levelObj.isBoss
-                ? "Tahap 2: Boss Challenge (Isi Kode Rumpang)"
-                : "Tahap 2: Quiz Ketuntasan";
+                ? "Tahap 2: Boss Challenge (Drag & Drop)"
+                : "Tahap 2: Quiz Ketuntasan Level";
             document.getElementById('quiz-attempt-badge').textContent = `Percobaan #${prevAttempts + 1}`;
 
             // Update Stepper
             document.getElementById('step-ind-2').className = "flex items-center gap-2 text-indigo-600";
             document.getElementById('step-ind-2').querySelector('span').className = "w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center";
 
-            // Info KKM dinamis sesuai jumlah soal level
-            const totalSoalLevel = levelObj.questions.length;
-            const minBenarKKM = Math.ceil(totalSoalLevel * 0.8);
-            const infoKkmSpan = document.querySelector('#stage-quiz-body .bg-amber-50 span');
-            if (infoKkmSpan) {
-                infoKkmSpan.innerHTML = `Syarat Tuntas: Jawab benar minimal <strong>${minBenarKKM} dari ${totalSoalLevel} soal (Skor ≥ 80%)</strong> untuk membuka level berikutnya!`;
-            }
-
-            // Render Soal
             const qContainer = document.getElementById('quiz-questions-container');
-            qContainer.innerHTML = levelObj.questions.map((item, qIdx) => {
-                if (item.type === 'mcq') {
-                    return `
-                        <div class="bg-slate-50 border-2 border-slate-200 rounded-2xl p-4 sm:p-5">
-                            <div class="flex items-start gap-3 mb-3">
-                                <span class="w-7 h-7 rounded-lg bg-indigo-600 text-white font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">${qIdx + 1}</span>
-                                <p class="font-semibold text-slate-800 text-sm sm:text-base">${escapeHTML(item.q)}</p>
+            const infoKkmSpan = document.getElementById('quiz-kkm-text');
+
+            if (levelObj.isBoss && levelObj.dndGroups) {
+                // Mode Boss Level 8: Drag & Drop
+                const totalSlots = levelObj.dndGroups.reduce((acc, g) => acc + g.slots.length, 0);
+                const minBenar = Math.ceil(totalSlots * 0.8);
+                if (infoKkmSpan) {
+                    infoKkmSpan.innerHTML = `Syarat Menamatkan Boss Level: Pasangkan minimal <strong>${minBenar} dari ${totalSlots} target Drag & Drop (Skor ≥ 80%)</strong>!`;
+                }
+
+                qContainer.innerHTML = levelObj.dndGroups.map((grp, gIdx) => `
+                    <div class="bg-slate-50 border-2 border-rose-200 rounded-2xl p-4 sm:p-5 space-y-4">
+                        <div class="flex items-center justify-between gap-2 border-b border-rose-200 pb-2.5">
+                            <h4 class="font-game text-base sm:text-lg font-bold text-rose-900">
+                                <i class="fa-solid fa-puzzle-piece text-rose-600 mr-1.5"></i>${escapeHTML(grp.groupTitle)}
+                            </h4>
+                            <span class="text-[11px] font-bold bg-rose-100 text-rose-800 px-2.5 py-0.5 rounded-full">Seret / Ketuk Balok</span>
+                        </div>
+
+                        ${grp.codeContext ? `
+                            <pre class="code-block text-xs">${escapeHTML(grp.codeContext)}</pre>
+                        ` : ''}
+
+                        <!-- Bank Pilihan Jawaban (Draggable Chips) -->
+                        <div class="bg-white p-3.5 rounded-xl border-2 border-dashed border-indigo-300">
+                            <div class="text-[11px] font-bold uppercase text-indigo-600 mb-2 flex items-center gap-1.5">
+                                <i class="fa-solid fa-hand-pointer"></i>
+                                <span>Bank Pilihan Jawaban (Seret ke kotak target di bawah atau klik untuk memilih):</span>
                             </div>
-                            <div class="grid grid-cols-1 gap-2 pl-0 sm:pl-10">
-                                ${item.options.map((opt, optIdx) => `
-                                    <label class="flex items-center gap-3 p-3 rounded-xl border-2 border-slate-200 bg-white hover:border-indigo-400 cursor-pointer transition has-[:checked]:border-indigo-600 has-[:checked]:bg-indigo-50">
-                                        <input type="radio" name="q_${qIdx}" value="${optIdx}" onchange="recordMCQAnswer(${qIdx}, ${optIdx})" class="w-4 h-4 accent-indigo-600">
-                                        <span class="text-sm font-medium text-slate-700">${escapeHTML(opt)}</span>
-                                    </label>
+                            <div id="dnd-bank-${gIdx}" class="flex flex-wrap gap-2">
+                                ${grp.bank.map(chip => `
+                                    <div id="chip-${chip.id}" draggable="true"
+                                        ondragstart="handleDragStart(event, '${chip.id}', ${gIdx})"
+                                        onclick="handleChipTap('${chip.id}', ${gIdx})"
+                                        data-chip-id="${chip.id}" data-group-idx="${gIdx}"
+                                        class="dnd-chip cursor-grab active:cursor-grabbing px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs shadow border-b-2 border-indigo-900">
+                                        ${escapeHTML(chip.text)}
+                                    </div>
                                 `).join('')}
                             </div>
                         </div>
-                    `;
-                } else {
-                    // Soal Fill-in-the-Blank untuk Boss Level 8
-                    return `
-                        <div class="bg-slate-900 text-slate-100 border-2 border-rose-500/50 rounded-2xl p-4 sm:p-5 shadow-md">
-                            <div class="flex items-start gap-3 mb-3">
-                                <span class="w-7 h-7 rounded-lg bg-rose-600 text-white font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">${qIdx + 1}</span>
-                                <p class="font-semibold text-amber-300 text-sm sm:text-base">${escapeHTML(item.q)}</p>
-                            </div>
-                            <div class="bg-slate-950 rounded-xl p-4 font-code text-xs sm:text-sm border border-slate-800 overflow-x-auto leading-relaxed">
-                                <pre class="whitespace-pre-wrap inline">${escapeHTML(item.codeBefore)}</pre><input type="text" oninput="recordFillAnswer(${qIdx}, this.value)" placeholder="${item.placeholder}" autocomplete="off" spellcheck="false" class="mx-1 px-2.5 py-1 rounded-lg bg-amber-400/20 border-2 border-amber-400 text-amber-200 font-code font-bold text-xs sm:text-sm focus:outline-none focus:bg-amber-400/30 w-40 sm:w-48 text-center" /><pre class="whitespace-pre-wrap inline">${escapeHTML(item.codeAfter)}</pre>
-                            </div>
+
+                        <!-- Daftar Target Drop Zones -->
+                        <div class="space-y-3">
+                            ${grp.slots.map(slot => `
+                                <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm space-y-2">
+                                    <div class="text-xs sm:text-sm font-semibold text-slate-800">${escapeHTML(slot.prompt)}</div>
+                                    <div id="dropzone-${slot.id}"
+                                        ondragover="handleDragOver(event)"
+                                        ondragleave="handleDragLeave(event)"
+                                        ondrop="handleDrop(event, '${slot.id}', ${gIdx})"
+                                        onclick="handleSlotTap('${slot.id}', ${gIdx})"
+                                        data-slot-id="${slot.id}" data-group-idx="${gIdx}"
+                                        class="dnd-slot min-h-[44px] rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-3 py-2 flex items-center justify-between gap-2 cursor-pointer hover:border-amber-400">
+                                        <span class="text-xs text-slate-400 italic pointer-events-none">Letakkan / ketuk jawaban di sini...</span>
+                                    </div>
+                                </div>
+                            `).join('')}
                         </div>
-                    `;
+                    </div>
+                `).join('');
+            } else {
+                // Mode Level 1 - 7: Soal ASAS (PG Tunggal & PG Kompleks Multi-Checklist)
+                const totalSoalLevel = levelObj.questions.length;
+                const minBenarKKM = Math.ceil(totalSoalLevel * 0.8);
+                if (infoKkmSpan) {
+                    infoKkmSpan.innerHTML = `Syarat Tuntas: Jawab benar minimal <strong>${minBenarKKM} dari ${totalSoalLevel} soal (Skor ≥ 80%)</strong> untuk membuka level berikutnya!`;
                 }
-            }).join('');
+
+                qContainer.innerHTML = levelObj.questions.map((item, qIdx) => {
+                    if (item.type === 'mcq_multi') {
+                        return `
+                            <div class="bg-slate-50 border-2 border-indigo-200 rounded-2xl p-4 sm:p-5">
+                                <div class="flex items-start gap-3 mb-3">
+                                    <span class="w-7 h-7 rounded-lg bg-purple-600 text-white font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">${qIdx + 1}</span>
+                                    <div>
+                                        <span class="inline-block text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-purple-100 text-purple-800 mb-1">Pilihan Ganda Kompleks (Pilih lebih dari 1 jawaban benar)</span>
+                                        <p class="font-semibold text-slate-800 text-sm sm:text-base">${escapeHTML(item.q)}</p>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 gap-2 pl-0 sm:pl-10">
+                                    ${item.options.map((opt, optIdx) => `
+                                        <label class="flex items-center gap-3 p-3 rounded-xl border-2 border-slate-200 bg-white hover:border-purple-400 cursor-pointer transition has-[:checked]:border-purple-600 has-[:checked]:bg-purple-50">
+                                            <input type="checkbox" name="q_multi_${qIdx}" value="${optIdx}" onchange="recordMultiMCQAnswer(${qIdx}, ${optIdx}, this.checked)" class="w-4 h-4 rounded accent-purple-600">
+                                            <span class="text-sm font-medium text-slate-700">${escapeHTML(opt)}</span>
+                                        </label>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        return `
+                            <div class="bg-slate-50 border-2 border-slate-200 rounded-2xl p-4 sm:p-5">
+                                <div class="flex items-start gap-3 mb-3">
+                                    <span class="w-7 h-7 rounded-lg bg-indigo-600 text-white font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">${qIdx + 1}</span>
+                                    <p class="font-semibold text-slate-800 text-sm sm:text-base">${escapeHTML(item.q)}</p>
+                                </div>
+                                <div class="grid grid-cols-1 gap-2 pl-0 sm:pl-10">
+                                    ${item.options.map((opt, optIdx) => `
+                                        <label class="flex items-center gap-3 p-3 rounded-xl border-2 border-slate-200 bg-white hover:border-indigo-400 cursor-pointer transition has-[:checked]:border-indigo-600 has-[:checked]:bg-indigo-50">
+                                            <input type="radio" name="q_${qIdx}" value="${optIdx}" onchange="recordMCQAnswer(${qIdx}, ${optIdx})" class="w-4 h-4 accent-indigo-600">
+                                            <span class="text-sm font-medium text-slate-700">${escapeHTML(opt)}</span>
+                                        </label>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `;
+                    }
+                }).join('');
+            }
 
             // Toggle panel
             document.getElementById('stage-summary-body').classList.add('hidden');
@@ -2003,54 +2182,224 @@ cout &lt;&lt; M[<span class="num">1</span>][<span class="num">0</span>]; <span c
             userQuizAnswers[qIdx] = optIdx;
         };
 
-        window.recordFillAnswer = function(qIdx, val) {
-            userQuizAnswers[qIdx] = val;
+        window.recordMultiMCQAnswer = function(qIdx, optIdx, isChecked) {
+            if (!Array.isArray(userQuizAnswers[qIdx])) {
+                userQuizAnswers[qIdx] = [];
+            }
+            if (isChecked) {
+                if (!userQuizAnswers[qIdx].includes(optIdx)) {
+                    userQuizAnswers[qIdx].push(optIdx);
+                }
+            } else {
+                userQuizAnswers[qIdx] = userQuizAnswers[qIdx].filter(i => i !== optIdx);
+            }
+        };
+
+        // =========================================================================
+        // HANDLER DRAG & DROP + TAP INTERAKTIF UNTUK BOSS LEVEL 8
+        // =========================================================================
+        window.handleDragStart = function(e, chipId, groupIdx) {
+            e.dataTransfer.setData("text/plain", JSON.stringify({ chipId, groupIdx }));
+        };
+
+        window.handleDragOver = function(e) {
+            e.preventDefault();
+            e.currentTarget.classList.add('drag-over');
+        };
+
+        window.handleDragLeave = function(e) {
+            e.currentTarget.classList.remove('drag-over');
+        };
+
+        window.handleDrop = function(e, slotId, slotGroupIdx) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('drag-over');
+            try {
+                const data = JSON.parse(e.dataTransfer.getData("text/plain"));
+                if (data.groupIdx !== slotGroupIdx) {
+                    showToast("Pasangkan balok jawaban sesuai Arena masing-masing!", "warning");
+                    return;
+                }
+                assignChipToSlot(data.chipId, slotId, slotGroupIdx);
+            } catch (err) {
+                console.warn("Drop data invalid:", err);
+            }
+        };
+
+        // Dukungan Tap/Klik untuk pengguna HP / Touchscreen
+        window.handleChipTap = function(chipId, groupIdx) {
+            document.querySelectorAll('.dnd-chip').forEach(el => el.classList.remove('ring-4', 'ring-amber-400'));
+            if (selectedDragChip && selectedDragChip.chipId === chipId) {
+                selectedDragChip = null;
+                return;
+            }
+            selectedDragChip = { chipId, groupIdx };
+            const chipEl = document.getElementById(`chip-${chipId}`);
+            if (chipEl) chipEl.classList.add('ring-4', 'ring-amber-400');
+        };
+
+        window.handleSlotTap = function(slotId, slotGroupIdx) {
+            if (!selectedDragChip) {
+                // Jika slot sudah terisi, klik slot akan mengembalikan chip ke bank
+                if (userQuizAnswers[slotId]) {
+                    removeChipFromSlot(slotId, slotGroupIdx);
+                }
+                return;
+            }
+            if (selectedDragChip.groupIdx !== slotGroupIdx) {
+                showToast("Pilih balok jawaban dari Arena yang sama!", "warning");
+                return;
+            }
+            assignChipToSlot(selectedDragChip.chipId, slotId, slotGroupIdx);
+            document.querySelectorAll('.dnd-chip').forEach(el => el.classList.remove('ring-4', 'ring-amber-400'));
+            selectedDragChip = null;
+        };
+
+        function assignChipToSlot(chipId, slotId, groupIdx) {
+            const levelObj = LEVELS_DATA.find(l => l.id === activeLevelId);
+            if (!levelObj || !levelObj.dndGroups) return;
+            const grp = levelObj.dndGroups[groupIdx];
+            const chipObj = grp.bank.find(c => c.id === chipId);
+            if (!chipObj) return;
+
+            // Jika chip ini sebelumnya sudah dipakai di slot lain, kosongkan slot lama
+            Object.keys(userQuizAnswers).forEach(existingSlotId => {
+                if (userQuizAnswers[existingSlotId] === chipId) {
+                    removeChipFromSlot(existingSlotId, groupIdx);
+                }
+            });
+
+            // Jika slot target sudah terisi chip lain, kembalikan chip lama ke bank
+            if (userQuizAnswers[slotId]) {
+                removeChipFromSlot(slotId, groupIdx);
+            }
+
+            userQuizAnswers[slotId] = chipId;
+
+            // Sembunyikan chip di bank
+            const bankChipEl = document.getElementById(`chip-${chipId}`);
+            if (bankChipEl) bankChipEl.classList.add('hidden');
+
+            // Tampilkan chip di dalam dropzone
+            const dropzoneEl = document.getElementById(`dropzone-${slotId}`);
+            if (dropzoneEl) {
+                dropzoneEl.classList.remove('border-dashed', 'border-slate-300', 'bg-slate-50');
+                dropzoneEl.classList.add('border-solid', 'border-emerald-500', 'bg-emerald-50');
+                dropzoneEl.innerHTML = `
+                    <span class="text-xs sm:text-sm font-bold text-emerald-900">${escapeHTML(chipObj.text)}</span>
+                    <button type="button" onclick="event.stopPropagation(); removeChipFromSlot('${slotId}', ${groupIdx})" title="Lepas jawaban"
+                        class="w-6 h-6 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 flex items-center justify-center text-xs shrink-0">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                `;
+            }
+        }
+
+        window.removeChipFromSlot = function(slotId, groupIdx) {
+            const oldChipId = userQuizAnswers[slotId];
+            delete userQuizAnswers[slotId];
+
+            if (oldChipId) {
+                const bankChipEl = document.getElementById(`chip-${oldChipId}`);
+                if (bankChipEl) bankChipEl.classList.remove('hidden', 'ring-4', 'ring-amber-400');
+            }
+
+            const dropzoneEl = document.getElementById(`dropzone-${slotId}`);
+            if (dropzoneEl) {
+                dropzoneEl.classList.remove('border-solid', 'border-emerald-500', 'bg-emerald-50');
+                dropzoneEl.classList.add('border-dashed', 'border-slate-300', 'bg-slate-50');
+                dropzoneEl.innerHTML = `<span class="text-xs text-slate-400 italic pointer-events-none">Letakkan / ketuk jawaban di sini...</span>`;
+            }
         };
 
         window.submitQuizAnswers = async function() {
             const levelObj = LEVELS_DATA.find(l => l.id === activeLevelId);
             if (!levelObj) return;
 
-            // Validasi semua soal sudah diisi
-            for (let i = 0; i < levelObj.questions.length; i++) {
-                const ans = userQuizAnswers[i];
-                if (ans === undefined || ans === null || String(ans).trim() === '') {
-                    showToast(`Soal nomor ${i + 1} belum dijawab! Lengkapi semua soal terlebih dahulu.`, "warning");
-                    return;
+            let correctCount = 0;
+            let totalQuestions = 0;
+            let evaluations = [];
+
+            if (levelObj.isBoss && levelObj.dndGroups) {
+                // Validasi semua slot Drag & Drop sudah terisi
+                const allSlots = [];
+                levelObj.dndGroups.forEach(grp => {
+                    grp.slots.forEach(sl => allSlots.push({ slot: sl, bank: grp.bank }));
+                });
+
+                for (let i = 0; i < allSlots.length; i++) {
+                    if (!userQuizAnswers[allSlots[i].slot.id]) {
+                        showToast(`Target nomor ${i + 1} belum diisi! Pasangkan semua balok jawaban terlebih dahulu.`, "warning");
+                        return;
+                    }
                 }
+
+                totalQuestions = allSlots.length;
+                evaluations = allSlots.map((entry, idx) => {
+                    const chosenChipId = userQuizAnswers[entry.slot.id];
+                    const isCorrect = chosenChipId === entry.slot.correctChipId;
+                    if (isCorrect) correctCount++;
+
+                    const userChip = entry.bank.find(c => c.id === chosenChipId);
+                    const correctChip = entry.bank.find(c => c.id === entry.slot.correctChipId);
+
+                    return {
+                        number: idx + 1,
+                        question: entry.slot.prompt,
+                        isCorrect,
+                        userAnswerText: userChip ? userChip.text : '-',
+                        correctAnswerText: correctChip ? correctChip.text : '-',
+                        explanation: entry.slot.explanation
+                    };
+                });
+            } else {
+                // Validasi soal Level 1 - 7 (PG Tunggal & PG Kompleks)
+                for (let i = 0; i < levelObj.questions.length; i++) {
+                    const item = levelObj.questions[i];
+                    const ans = userQuizAnswers[i];
+                    if (item.type === 'mcq_multi') {
+                        if (!Array.isArray(ans) || ans.length === 0) {
+                            showToast(`Soal nomor ${i + 1} (Pilihan Ganda Kompleks) belum dicentang!`, "warning");
+                            return;
+                        }
+                    } else if (ans === undefined || ans === null || String(ans).trim() === '') {
+                        showToast(`Soal nomor ${i + 1} belum dijawab! Lengkapi semua soal terlebih dahulu.`, "warning");
+                        return;
+                    }
+                }
+
+                totalQuestions = levelObj.questions.length;
+                evaluations = levelObj.questions.map((item, idx) => {
+                    const userAns = userQuizAnswers[idx];
+                    let isCorrect = false;
+                    let userAnswerText = '';
+                    let correctAnswerText = '';
+
+                    if (item.type === 'mcq_multi') {
+                        const sortedUser = [...userAns].map(Number).sort((a, b) => a - b);
+                        const sortedCorrect = [...item.answers].sort((a, b) => a - b);
+                        isCorrect = sortedUser.length === sortedCorrect.length &&
+                            sortedUser.every((val, index) => val === sortedCorrect[index]);
+                        userAnswerText = sortedUser.map(i => item.options[i]).join(" | ");
+                        correctAnswerText = sortedCorrect.map(i => item.options[i]).join(" | ");
+                    } else {
+                        isCorrect = Number(userAns) === item.answer;
+                        userAnswerText = item.options[Number(userAns)];
+                        correctAnswerText = item.options[item.answer];
+                    }
+
+                    if (isCorrect) correctCount++;
+                    return {
+                        number: idx + 1,
+                        question: item.q,
+                        isCorrect,
+                        userAnswerText,
+                        correctAnswerText,
+                        explanation: item.explanation
+                    };
+                });
             }
 
-            // Hitung Skor
-            let correctCount = 0;
-            const evaluations = levelObj.questions.map((item, idx) => {
-                const userAns = userQuizAnswers[idx];
-                let isCorrect = false;
-                let userAnswerText = '';
-                let correctAnswerText = '';
-
-                if (item.type === 'mcq') {
-                    isCorrect = Number(userAns) === item.answer;
-                    userAnswerText = item.options[Number(userAns)];
-                    correctAnswerText = item.options[item.answer];
-                } else {
-                    const normalizedUser = String(userAns).trim().replace(/\s+/g, '');
-                    isCorrect = item.validAnswers.some(valid => valid.replace(/\s+/g, '') === normalizedUser);
-                    userAnswerText = String(userAns).trim();
-                    correctAnswerText = item.validAnswers[0];
-                }
-
-                if (isCorrect) correctCount++;
-                return {
-                    number: idx + 1,
-                    question: item.q,
-                    isCorrect,
-                    userAnswerText,
-                    correctAnswerText,
-                    explanation: item.explanation
-                };
-            });
-
-            const totalQuestions = levelObj.questions.length;
             const scorePercent = Math.round((correctCount / totalQuestions) * 100);
             const isPassed = scorePercent >= 80; // KKM 80%
 
@@ -2069,7 +2418,6 @@ cout &lt;&lt; M[<span class="num">1</span>][<span class="num">0</span>]; <span c
 
             let unlockedNewLevel = false;
             if (isPassed) {
-                // Tambah XP jika baru pertama kali lulus atau skor meningkat
                 if (prevBestScore < 80) {
                     currentStudent.xp = (currentStudent.xp || 0) + (levelObj.isBoss ? 300 : 150);
                 }
@@ -2103,6 +2451,11 @@ cout &lt;&lt; M[<span class="num">1</span>][<span class="num">0</span>]; <span c
 
             if (isPassed && typeof confetti === 'function') {
                 confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+            }
+
+            // Jika menaklukkan BOSS LEVEL 8, tampilkan layar selebrasi epik!
+            if (isPassed && levelObj.isBoss) {
+                triggerBossVictoryCelebration(scorePercent);
             }
 
             resBody.innerHTML = `
@@ -2168,6 +2521,53 @@ cout &lt;&lt; M[<span class="num">1</span>][<span class="num">0</span>]; <span c
             }
         }
 
+        function triggerBossVictoryCelebration(bossScore) {
+            if (!currentStudent) return;
+            document.getElementById('victory-avatar').textContent = currentStudent.avatar || '🤖';
+            document.getElementById('victory-username').textContent = currentStudent.username;
+            document.getElementById('victory-class-info').textContent = `ABSEN #${String(currentStudent.absen).padStart(2, '0')} • ${currentStudent.kelas}`;
+            document.getElementById('victory-boss-score').textContent = `${bossScore}%`;
+            document.getElementById('victory-total-xp').textContent = `${currentStudent.xp || 0} XP`;
+
+            const modal = document.getElementById('boss-victory-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            // Ledakan konfeti bertubi-tubi dari kiri dan kanan layar
+            if (typeof confetti === 'function') {
+                const duration = 3200;
+                const end = Date.now() + duration;
+                (function frame() {
+                    confetti({
+                        particleCount: 6,
+                        angle: 60,
+                        spread: 60,
+                        origin: { x: 0, y: 0.65 },
+                        colors: ['#fbbf24', '#34d399', '#38bdf8', '#f472b6']
+                    });
+                    confetti({
+                        particleCount: 6,
+                        angle: 120,
+                        spread: 60,
+                        origin: { x: 1, y: 0.65 },
+                        colors: ['#fbbf24', '#34d399', '#38bdf8', '#f472b6']
+                    });
+                    if (Date.now() < end) {
+                        requestAnimationFrame(frame);
+                    }
+                }());
+            }
+        }
+
+        window.closeBossVictoryModal = function(goBackToMap) {
+            const modal = document.getElementById('boss-victory-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            if (goBackToMap) {
+                closeLevelModal();
+            }
+        };
+
         function escapeHTML(str) {
             return String(str)
                 .replace(/&/g, "&amp;")
@@ -2217,29 +2617,158 @@ cout &lt;&lt; M[<span class="num">1</span>][<span class="num">0</span>]; <span c
             teacherView.classList.remove('hidden');
             teacherView.classList.add('flex');
 
+            renderTeacherLevelPreviewButtons();
             updateTeacherStats();
             renderTeacherTable();
             await refreshTeacherCloudData(true);
         }
 
+        function renderTeacherLevelPreviewButtons() {
+            const grid = document.getElementById('teacher-level-preview-grid');
+            if (!grid) return;
+
+            grid.innerHTML = LEVELS_DATA.map(lvl => `
+                <button type="button" onclick="openTeacherLevelPreview(${lvl.id})"
+                    class="group p-3 rounded-2xl border-2 border-slate-200 hover:border-indigo-500 bg-slate-50 hover:bg-indigo-50/70 text-left transition flex flex-col justify-between gap-2 shadow-xs">
+                    <div class="flex items-center justify-between w-full">
+                        <span class="px-2 py-0.5 rounded-lg text-[11px] font-game font-bold text-white bg-gradient-to-r ${lvl.color}">
+                            ${lvl.isBoss ? '👑 BOSS L8' : `LEVEL ${lvl.id}`}
+                        </span>
+                        <i class="fa-solid fa-arrow-up-right-from-square text-xs text-slate-400 group-hover:text-indigo-600 transition"></i>
+                    </div>
+                    <div>
+                        <div class="font-game text-xs font-bold text-slate-800 group-hover:text-indigo-900 line-clamp-1">${escapeHTML(lvl.title)}</div>
+                        <div class="text-[10px] text-slate-500 line-clamp-1 mt-0.5">${escapeHTML(lvl.subtitle)}</div>
+                    </div>
+                </button>
+            `).join('');
+        }
+
+        window.openTeacherLevelPreview = function(levelId) {
+            const lvl = LEVELS_DATA.find(l => l.id === levelId);
+            if (!lvl) return;
+
+            document.getElementById('tp-modal-badge').textContent = lvl.isBoss ? '👑' : lvl.id;
+            document.getElementById('tp-modal-title').textContent = `Level ${lvl.id}: ${lvl.title}`;
+
+            // Render navigasi cepat antar level (L1 - L8)
+            const navEl = document.getElementById('tp-modal-nav');
+            navEl.innerHTML = LEVELS_DATA.map(item => `
+                <button type="button" onclick="openTeacherLevelPreview(${item.id})"
+                    class="px-3 py-1.5 rounded-xl text-xs font-game font-bold shrink-0 transition ${item.id === levelId
+                        ? 'bg-indigo-600 text-white shadow'
+                        : 'bg-white text-slate-600 hover:bg-indigo-50 border border-slate-200'}">
+                    ${item.isBoss ? '👑 Boss L8' : `Level ${item.id}`}
+                </button>
+            `).join('');
+
+            // Susun tampilan soal & kunci jawaban untuk guru
+            let questionsPreviewHTML = '';
+            if (lvl.isBoss && lvl.dndGroups) {
+                questionsPreviewHTML = lvl.dndGroups.map((grp, gIdx) => `
+                    <div class="bg-rose-50/60 border-2 border-rose-200 rounded-2xl p-4 sm:p-5 space-y-3">
+                        <h5 class="font-game text-base font-bold text-rose-900">
+                            <i class="fa-solid fa-puzzle-piece text-rose-600 mr-1.5"></i>${escapeHTML(grp.groupTitle)}
+                        </h5>
+                        ${grp.codeContext ? `<pre class="code-block text-xs">${escapeHTML(grp.codeContext)}</pre>` : ''}
+                        <div class="space-y-2.5">
+                            ${grp.slots.map(slot => {
+                                const ansChip = grp.bank.find(c => c.id === slot.correctChipId);
+                                return `
+                                    <div class="bg-white p-3.5 rounded-xl border border-slate-200 space-y-1.5">
+                                        <div class="text-xs sm:text-sm font-semibold text-slate-800">${escapeHTML(slot.prompt)}</div>
+                                        <div class="text-xs bg-emerald-50 border border-emerald-200 text-emerald-900 px-3 py-2 rounded-lg font-mono font-bold">
+                                            <i class="fa-solid fa-check-circle text-emerald-600 mr-1.5"></i>Kunci Pasangan: ${escapeHTML(ansChip ? ansChip.text : '-')}
+                                        </div>
+                                        <div class="text-[11px] text-slate-500"><strong>Pembahasan:</strong> ${escapeHTML(slot.explanation)}</div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                questionsPreviewHTML = lvl.questions.map((item, qIdx) => `
+                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2.5">
+                        <div class="flex items-start gap-2.5">
+                            <span class="w-6 h-6 rounded-lg bg-indigo-600 text-white font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">${qIdx + 1}</span>
+                            <div>
+                                ${item.type === 'mcq_multi' ? `<span class="inline-block text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-purple-100 text-purple-800 mb-1">Pilihan Ganda Kompleks</span>` : ''}
+                                <p class="font-semibold text-slate-800 text-xs sm:text-sm">${escapeHTML(item.q)}</p>
+                            </div>
+                        </div>
+                        <div class="space-y-1.5 pl-0 sm:pl-8">
+                            ${item.options.map((opt, optIdx) => {
+                                const isKey = item.type === 'mcq_multi'
+                                    ? item.answers.includes(optIdx)
+                                    : item.answer === optIdx;
+                                return `
+                                    <div class="px-3 py-2 rounded-xl text-xs sm:text-sm flex items-center justify-between gap-2 border ${isKey
+                                        ? 'bg-emerald-50 border-emerald-400 text-emerald-950 font-bold'
+                                        : 'bg-white border-slate-200 text-slate-600'}">
+                                        <span>${escapeHTML(opt)}</span>
+                                        ${isKey ? `<span class="text-[11px] px-2 py-0.5 rounded-full bg-emerald-600 text-white shrink-0"><i class="fa-solid fa-check mr-1"></i>Kunci</span>` : ''}
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                        <div class="ml-0 sm:ml-8 text-xs text-slate-600 bg-white p-2.5 rounded-xl border border-slate-200">
+                            <strong class="text-indigo-700">Pembahasan:</strong> ${escapeHTML(item.explanation)}
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            const bodyEl = document.getElementById('tp-modal-body');
+            bodyEl.innerHTML = `
+                <div class="space-y-3">
+                    <div class="flex items-center gap-2 border-b border-slate-200 pb-2">
+                        <span class="px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-800 font-game font-bold text-xs">BAGIAN 1</span>
+                        <h4 class="font-game text-base sm:text-lg font-bold text-slate-800">Rangkuman Materi yang Dibaca Siswa</h4>
+                    </div>
+                    <div class="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5">
+                        ${lvl.summaryHTML}
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    <div class="flex items-center gap-2 border-b border-slate-200 pb-2">
+                        <span class="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 font-game font-bold text-xs">BAGIAN 2</span>
+                        <h4 class="font-game text-base sm:text-lg font-bold text-slate-800">Daftar Soal Kuis, Kunci Jawaban & Pembahasan</h4>
+                    </div>
+                    <div class="space-y-4">
+                        ${questionsPreviewHTML}
+                    </div>
+                </div>
+            `;
+            bodyEl.scrollTop = 0;
+
+            const modal = document.getElementById('teacher-preview-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        };
+
+        window.closeTeacherLevelPreview = function() {
+            const modal = document.getElementById('teacher-preview-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        };
+
         window.refreshTeacherCloudData = async function(silent = false) {
             const btn = document.getElementById('btn-refresh-cloud');
             if (btn) {
                 btn.disabled = true;
-                btn.innerHTML = `<i class="fa-solid fa-arrows-rotate fa-spin"></i><span>Memuat Cloud...</span>`;
+                btn.innerHTML = `<i class="fa-solid fa-arrows-rotate fa-spin"></i><span>Memuat...</span>`;
             }
-
             const ok = await fetchAllStudentsFromSheets(silent);
             updateTeacherStats();
             renderTeacherTable();
-
-            if (ok && !silent) {
-                showToast("Data terbaru berhasil dimuat dari Google Sheets!", "success");
-            }
-
             if (btn) {
                 btn.disabled = false;
                 btn.innerHTML = `<i class="fa-solid fa-arrows-rotate"></i><span>Refresh Data Cloud</span>`;
+            }
+            if (ok && !silent) {
+                showToast("Data siswa berhasil diperbarui dari Google Sheets!", "success");
             }
         };
 
